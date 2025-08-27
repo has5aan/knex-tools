@@ -1,0 +1,7 @@
+node_modules
+sqlite3.exe
+logs/
+**/*.sqlite3
+.DS_Store
+coverage/
+.vscode/

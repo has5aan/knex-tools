@@ -1,0 +1,5 @@
+# lint
+npx eslint .
+
+# Check which files need formatting
+npx prettier . --list-different --log-level error
