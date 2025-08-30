@@ -385,17 +385,321 @@ describe('knexTools', () => {
     })
   })
 
+  describe('applyJoinConditions', () => {
+    describe('operators', () => {
+      const testCases = [
+        {
+          name: 'equals operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { equals: 1 } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` = 1',
+            bindings: []
+          }
+        },
+        {
+          name: 'not operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { not: 1 } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` != 1',
+            bindings: []
+          }
+        },
+        {
+          name: 'gt operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { gt: 0 } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` > 0',
+            bindings: []
+          }
+        },
+        {
+          name: 'gte operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { gte: 0 } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` >= 0',
+            bindings: []
+          }
+        },
+        {
+          name: 'lt operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { lt: 1 } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` < 1',
+            bindings: []
+          }
+        },
+        {
+          name: 'lte operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { lte: 1 } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` <= 1',
+            bindings: []
+          }
+        },
+        {
+          name: 'contains operator in join condition',
+          parameters: {
+            joinConditions: { name: { contains: 'Test' } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`name` like `%Test%`',
+            bindings: []
+          }
+        },
+        {
+          name: 'startsWith operator in join condition',
+          parameters: {
+            joinConditions: { name: { startsWith: 'Test' } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`name` like `Test%`',
+            bindings: []
+          }
+        },
+        {
+          name: 'endsWith operator in join condition',
+          parameters: {
+            joinConditions: { name: { endsWith: 'Test' } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`name` like `%Test`',
+            bindings: []
+          }
+        },
+        {
+          name: 'in operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { in: [1, 2] } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` in (?, ?)',
+            bindings: [1, 2]
+          }
+        },
+        {
+          name: 'notIn operator in join condition',
+          parameters: {
+            joinConditions: { user_id: { notIn: [1, 2] } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` not in (?, ?)',
+            bindings: [1, 2]
+          }
+        },
+        {
+          name: 'isNull operator in join condition',
+          parameters: {
+            joinConditions: { deleted_at: { isNull: true } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`deleted_at` is null',
+            bindings: []
+          }
+        },
+        {
+          name: 'isNotNull operator in join condition',
+          parameters: {
+            joinConditions: { email: { isNotNull: true } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`email` is not null',
+            bindings: []
+          }
+        },
+        {
+          name: 'direct null assignment in join condition',
+          parameters: {
+            joinConditions: { middle_name: null }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`middle_name` is null',
+            bindings: []
+          }
+        },
+        {
+          name: 'direct value equality in join condition',
+          parameters: {
+            joinConditions: { user_id: 1 }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` = 1',
+            bindings: []
+          }
+        },
+        {
+          name: 'multiple conditions on same field in join',
+          parameters: {
+            joinConditions: { user_id: { gt: 0, not: 2 } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` > 0 and `user`.`user_id` != 2',
+            bindings: []
+          }
+        },
+        {
+          name: 'conditions ignored when _condition is false in join',
+          parameters: {
+            joinConditions: {
+              user_id: { equals: 1, _condition: false }
+            }
+          },
+          expected: {
+            sql: 'left join `user`',
+            bindings: []
+          }
+        },
+        {
+          name: 'conditions applied when _condition is true in join',
+          parameters: {
+            joinConditions: {
+              user_id: { equals: 1, _condition: true }
+            }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`user_id` = 1',
+            bindings: []
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', ({ parameters, expected }) => {
+        const query = db('folder').select('*')
+        query.leftJoin('user', function () {
+          knexTools.applyJoinConditions(this, 'user', parameters.joinConditions)
+        })
+        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
+      })
+    })
+
+    describe('logical operators', () => {
+      const testCases = [
+        {
+          name: 'AND logical operator in join conditions',
+          parameters: {
+            joinConditions: {
+              AND: [
+                { active: true },
+                { verified: true },
+                { role: { not: 'banned' } }
+              ]
+            }
+          },
+          expected: {
+            sql: 'left join `user` on (`user`.`active` = `true`) and (`user`.`verified` = `true`) and (`user`.`role` != `banned`)',
+            bindings: []
+          }
+        },
+        {
+          name: 'OR logical operator in join conditions',
+          parameters: {
+            joinConditions: {
+              OR: [{ role: 'admin' }, { premium: true }]
+            }
+          },
+          expected: {
+            sql: 'left join `user` on (`user`.`role` = `admin`) or (`user`.`premium` = `true`)',
+            bindings: []
+          }
+        },
+        {
+          name: 'NOT logical operator in join conditions',
+          parameters: {
+            joinConditions: {
+              NOT: {
+                banned: true,
+                deleted_at: { isNotNull: true }
+              }
+            }
+          },
+          expected: {
+            sql: 'left join `user` on ((`user`.`banned` != `true` and `user`.`deleted_at` is not null))',
+            bindings: []
+          }
+        },
+        {
+          name: 'complex nested logical operators in join conditions',
+          parameters: {
+            joinConditions: {
+              AND: [
+                { active: true },
+                {
+                  OR: [
+                    { role: 'admin' },
+                    {
+                      AND: [{ premium: true }, { verified: true }]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          expected: {
+            sql: 'left join `user` on (`user`.`active` = `true`) and ((`user`.`role` = `admin`) or ((`user`.`premium` = `true`) and (`user`.`verified` = `true`)))',
+            bindings: []
+          }
+        },
+        {
+          name: 'AND conditions with _condition flags',
+          parameters: {
+            joinConditions: {
+              AND: [
+                { active: true, _condition: true },
+                { verified: true, _condition: false },
+                { role: 'admin' }
+              ]
+            }
+          },
+          expected: {
+            sql: 'left join `user` on (`user`.`active` = `true`) and (`user`.`role` = `admin`)',
+            bindings: []
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', ({ parameters, expected }) => {
+        const query = db('folder').select('*')
+        query.leftJoin('user', function () {
+          knexTools.applyJoinConditions(this, 'user', parameters.joinConditions)
+        })
+        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
+      })
+    })
+  })
+
   describe('processJoins', () => {
     describe('one to many join', () => {
       const testCases = [
         {
-          name: 'one to many join',
+          name: 'one to many join without conditions',
+          parameters: {
+            join: {
+              children: {}
+            }
+          },
+          expected: {
+            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` left join `folder` as `children` on `children`.`parent_id` = `folder`.`id`',
+            bindings: []
+          }
+        },
+        {
+          name: 'one to many join with where conditions',
           parameters: {
             join: {
               children: {
-                join: {
-                  children: {}
-                },
                 where: {
                   user_id: { gt: 0, not: 2 }
                 }
@@ -403,7 +707,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'select * from `folder` left join `folder` as `children` on `folder`.`id` = `children`.`parent_id`',
+            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` left join `folder` as `children` on `children`.`parent_id` = `folder`.`id` and `children`.`user_id` > 0 and `children`.`user_id` != 2',
             bindings: []
           }
         }

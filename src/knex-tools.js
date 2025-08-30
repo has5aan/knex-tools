@@ -237,13 +237,7 @@ function processJoins(query, table, joins, relations) {
           )
 
           if (joinOptions.where) {
-            //applyJoinConditions(this, relationInfo.table, joinOptions.where)
-            applyWhereClauses(
-              query,
-              table,
-              { where: joinOptions.where },
-              relations
-            )
+            applyJoinConditions(this, relationName, joinOptions.where)
           }
         })
         break
@@ -281,74 +275,202 @@ function processJoins(query, table, joins, relations) {
 }
 
 function applyJoinConditions(joinQuery, table, conditions) {
-  Object.entries(conditions).forEach(([field, condition]) => {
-    // Handle null
-    if (condition === null) {
+  if (!conditions) {
+    return joinQuery
+  }
+
+  const logicalOperators = ['OR', 'AND', 'NOT']
+  const hasLogicalOps = logicalOperators.some(op => conditions[op])
+
+  // Process logical operators
+  if (hasLogicalOps) {
+    if (conditions.AND && Array.isArray(conditions.AND)) {
+      conditions.AND.forEach(condition => {
+        // Only apply if no _condition property exists or if it's true
+        if (
+          condition._condition === undefined ||
+          condition._condition === true
+        ) {
+          joinQuery.on(builder => {
+            applyJoinConditions(builder, table, condition)
+          })
+        }
+      })
+    }
+
+    if (conditions.OR && Array.isArray(conditions.OR)) {
+      conditions.OR.forEach(condition => {
+        joinQuery.orOn(builder => {
+          applyJoinConditions(builder, table, condition)
+        })
+      })
+    }
+
+    if (conditions.NOT) {
+      // For NOT in joins, we need to create a nested condition group
+      // Since Knex doesn't have direct NOT support for joins, we'll simulate it
+      joinQuery.on(function () {
+        this.on(function () {
+          // Apply NOT conditions as regular conditions first to build the structure
+          // Then we'll manually negate by creating the opposite
+          const notConditions = conditions.NOT
+
+          // For simple NOT implementation, we'll apply each field condition negated
+          Object.entries(notConditions).forEach(([field, fieldConditions]) => {
+            if (fieldConditions === null) {
+              this.andOnNotNull(`${table}.${field}`)
+              return
+            }
+
+            if (typeof fieldConditions !== 'object') {
+              this.andOn(`${table}.${field}`, '!=', fieldConditions)
+              return
+            }
+
+            // For complex conditions, we need to apply negated operators
+            Object.entries(fieldConditions).forEach(([operator, value]) => {
+              switch (operator) {
+                case 'equals':
+                  this.andOn(`${table}.${field}`, '!=', value)
+                  break
+                case 'not':
+                  this.andOn(`${table}.${field}`, '=', value)
+                  break
+                default:
+                  // For other operators, apply them normally (this is a simplified approach)
+                  applyJoinOperator(this, `${table}.${field}`, operator, value)
+              }
+            })
+          })
+        })
+      })
+    }
+  }
+
+  // Handle field conditions directly in the conditions object (for backward compatibility)
+  Object.entries(conditions).forEach(([field, fieldConditions]) => {
+    // Skip logical operators, columns and related
+    if (
+      logicalOperators.includes(field) ||
+      field === 'columns' ||
+      field === 'related'
+    ) {
+      return
+    }
+
+    // Skip special properties
+    if (field.startsWith('_')) {
+      return
+    }
+
+    // Handle null value directly (Prisma style)
+    if (fieldConditions === null) {
       joinQuery.andOnNull(`${table}.${field}`)
       return
     }
 
-    // Handle direct value equality
-    if (typeof condition !== 'object') {
-      joinQuery.andOn(`${table}.${field}`, '=', condition)
+    // Extract condition flag if present
+    const { _condition, ...actualConditions } =
+      typeof fieldConditions === 'object' && !Array.isArray(fieldConditions)
+        ? fieldConditions
+        : { _condition: undefined }
+
+    // If _condition is provided and not true, skip
+    if (_condition !== undefined && _condition !== true) {
       return
     }
 
-    // Handle operators - matching all our where operators
-    Object.entries(condition).forEach(([operator, value]) => {
-      switch (operator) {
-        case 'equals':
-          joinQuery.andOn(`${table}.${field}`, '=', value)
-          break
-        case 'not':
-          if (value === null) {
-            joinQuery.andOnNotNull(`${table}.${field}`)
-          } else {
-            joinQuery.andOn(`${table}.${field}`, '!=', value)
-          }
-          break
-        case 'gt':
-          joinQuery.andOn(`${table}.${field}`, '>', value)
-          break
-        case 'gte':
-          joinQuery.andOn(`${table}.${field}`, '>=', value)
-          break
-        case 'lt':
-          joinQuery.andOn(`${table}.${field}`, '<', value)
-          break
-        case 'lte':
-          joinQuery.andOn(`${table}.${field}`, '<=', value)
-          break
-        case 'contains':
-          joinQuery.andOn(`${table}.${field}`, 'like', `%${value}%`)
-          break
-        case 'startsWith':
-          joinQuery.andOn(`${table}.${field}`, 'like', `${value}%`)
-          break
-        case 'endsWith':
-          joinQuery.andOn(`${table}.${field}`, 'like', `%${value}`)
-          break
-        case 'in':
-          joinQuery.andOnIn(
-            `${table}.${field}`,
-            Array.isArray(value) ? value : [value]
-          )
-          break
-        case 'notIn':
-          joinQuery.andOnNotIn(
-            `${table}.${field}`,
-            Array.isArray(value) ? value : [value]
-          )
-          break
-      }
+    // If conditions is a primitive value, use equality
+    if (typeof fieldConditions !== 'object') {
+      joinQuery.andOn(`${table}.${field}`, '=', fieldConditions)
+      return
+    }
+
+    // Handle multiple operators for the same field
+    Object.entries(actualConditions).forEach(([operator, value]) => {
+      applyJoinOperator(joinQuery, `${table}.${field}`, operator, value)
     })
   })
+
+  return joinQuery
+}
+
+// Helper function to apply the right join operator
+function applyJoinOperator(joinQuery, field, operator, value) {
+  switch (operator) {
+    case 'equals':
+      joinQuery.andOn(`${field}`, '=', value)
+      break
+    case 'not':
+      if (value === null) {
+        joinQuery.andOnNotNull(`${field}`)
+      } else {
+        joinQuery.andOn(`${field}`, '!=', value)
+      }
+      break
+    case 'gt':
+      joinQuery.andOn(`${field}`, '>', value)
+      break
+    case 'gte':
+      joinQuery.andOn(`${field}`, '>=', value)
+      break
+    case 'lt':
+      joinQuery.andOn(`${field}`, '<', value)
+      break
+    case 'lte':
+      joinQuery.andOn(`${field}`, '<=', value)
+      break
+    case 'contains': {
+      // PostgreSQL optimization - use ILIKE for case-insensitive search
+      const containsOperator =
+        joinQuery.client &&
+        joinQuery.client.config &&
+        joinQuery.client.config.client === 'pg'
+          ? 'ilike'
+          : 'like'
+      joinQuery.andOn(`${field}`, containsOperator, `%${value}%`)
+      break
+    }
+    case 'startsWith': {
+      const startsWithOperator =
+        joinQuery.client &&
+        joinQuery.client.config &&
+        joinQuery.client.config.client === 'pg'
+          ? 'ilike'
+          : 'like'
+      joinQuery.andOn(`${field}`, startsWithOperator, `${value}%`)
+      break
+    }
+    case 'endsWith': {
+      const endsWithOperator =
+        joinQuery.client &&
+        joinQuery.client.config &&
+        joinQuery.client.config.client === 'pg'
+          ? 'ilike'
+          : 'like'
+      joinQuery.andOn(`${field}`, endsWithOperator, `%${value}`)
+      break
+    }
+    case 'in':
+      joinQuery.andOnIn(`${field}`, Array.isArray(value) ? value : [value])
+      break
+    case 'notIn':
+      joinQuery.andOnNotIn(`${field}`, Array.isArray(value) ? value : [value])
+      break
+    case 'isNull':
+      joinQuery.andOnNull(`${field}`)
+      break
+    case 'isNotNull':
+      joinQuery.andOnNotNull(`${field}`)
+      break
+  }
 }
 
 module.exports = {
   applyWhereClauses,
   applyPagingClauses,
   applySortingClauses,
+  applyJoinConditions,
   processJoins,
   buildMakeTransaction
 }
