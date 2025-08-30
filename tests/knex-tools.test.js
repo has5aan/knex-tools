@@ -394,8 +394,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: { equals: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` = 1',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` = ?',
+            bindings: [1]
           }
         },
         {
@@ -404,8 +404,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: { not: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` != 1',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` != ?',
+            bindings: [1]
           }
         },
         {
@@ -414,8 +414,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: { gt: 0 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` > 0',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` > ?',
+            bindings: [0]
           }
         },
         {
@@ -424,8 +424,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: { gte: 0 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` >= 0',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` >= ?',
+            bindings: [0]
           }
         },
         {
@@ -434,8 +434,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: { lt: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` < 1',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` < ?',
+            bindings: [1]
           }
         },
         {
@@ -444,8 +444,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: { lte: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` <= 1',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` <= ?',
+            bindings: [1]
           }
         },
         {
@@ -454,8 +454,8 @@ describe('knexTools', () => {
             joinConditions: { name: { contains: 'Test' } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`name` like `%Test%`',
-            bindings: []
+            sql: 'left join `user` on `user`.`name` like ?',
+            bindings: ['%Test%']
           }
         },
         {
@@ -464,8 +464,8 @@ describe('knexTools', () => {
             joinConditions: { name: { startsWith: 'Test' } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`name` like `Test%`',
-            bindings: []
+            sql: 'left join `user` on `user`.`name` like ?',
+            bindings: ['Test%']
           }
         },
         {
@@ -474,8 +474,8 @@ describe('knexTools', () => {
             joinConditions: { name: { endsWith: 'Test' } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`name` like `%Test`',
-            bindings: []
+            sql: 'left join `user` on `user`.`name` like ?',
+            bindings: ['%Test']
           }
         },
         {
@@ -534,8 +534,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: 1 }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` = 1',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` = ?',
+            bindings: [1]
           }
         },
         {
@@ -544,8 +544,8 @@ describe('knexTools', () => {
             joinConditions: { user_id: { gt: 0, not: 2 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` > 0 and `user`.`user_id` != 2',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` > ? and `user`.`user_id` != ?',
+            bindings: [0, 2]
           }
         },
         {
@@ -568,8 +568,8 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` = 1',
-            bindings: []
+            sql: 'left join `user` on `user`.`user_id` = ?',
+            bindings: [1]
           }
         }
       ]
@@ -598,8 +598,8 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = `true`) and (`user`.`verified` = `true`) and (`user`.`role` != `banned`)',
-            bindings: []
+            sql: 'left join `user` on (`user`.`active` = ?) and (`user`.`verified` = ?) and (`user`.`role` != ?)',
+            bindings: [true, true, 'banned']
           }
         },
         {
@@ -610,8 +610,8 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`role` = `admin`) or (`user`.`premium` = `true`)',
-            bindings: []
+            sql: 'left join `user` on (`user`.`role` = ?) or (`user`.`premium` = ?)',
+            bindings: ['admin', true]
           }
         },
         {
@@ -647,8 +647,8 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = `true`) and ((`user`.`role` = `admin`) or ((`user`.`premium` = `true`) and (`user`.`verified` = `true`)))',
-            bindings: []
+            sql: 'left join `user` on (`user`.`active` = ?) and ((`user`.`role` = ?) or ((`user`.`premium` = ?) and (`user`.`verified` = ?)))',
+            bindings: [true, 'admin', true, true]
           }
         },
         {
@@ -663,8 +663,8 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = `true`) and (`user`.`role` = `admin`)',
-            bindings: []
+            sql: 'left join `user` on (`user`.`active` = ?) and (`user`.`role` = ?)',
+            bindings: [true, 'admin']
           }
         }
       ]
@@ -707,8 +707,8 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` left join `folder` as `children` on `children`.`parent_id` = `folder`.`id` and `children`.`user_id` > 0 and `children`.`user_id` != 2',
-            bindings: []
+            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` left join `folder` as `children` on `children`.`parent_id` = `folder`.`id` and `children`.`user_id` > ? and `children`.`user_id` != ?',
+            bindings: [0, 2]
           }
         }
       ]

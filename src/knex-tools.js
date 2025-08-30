@@ -209,6 +209,12 @@ function processJoins(query, table, joins, relations) {
 
     const joinOptions = options === true ? {} : options
 
+    // Determine join type (enforce = INNER, include = LEFT, default = LEFT)
+    const joinType = joinOptions.type === 'enforce' ? 'innerJoin' : 'leftJoin'
+
+    // Extract join conditions - support both new 'on' and legacy 'where'
+    const joinConditions = joinOptions.on || joinOptions.where
+
     // Select columns with aliases
     const columns = relationInfo
       .modelDefinition()
@@ -217,49 +223,58 @@ function processJoins(query, table, joins, relations) {
 
     switch (relationInfo.type) {
       case 'belongsTo':
-        query.leftJoin(`${relationInfo.table} as ${relationName}`, function () {
-          this.on(
-            `${relationName}.${relationInfo.foreignKey}`,
-            `${table}.${relationInfo.primaryKey}`
-          )
+        query[joinType](
+          `${relationInfo.table} as ${relationName}`,
+          function () {
+            this.on(
+              `${relationName}.${relationInfo.foreignKey}`,
+              `${table}.${relationInfo.primaryKey}`
+            )
 
-          if (joinOptions.where) {
-            applyJoinConditions(this, relationInfo.table, joinOptions.where)
+            if (joinConditions) {
+              applyJoinConditions(this, relationInfo.table, joinConditions)
+            }
           }
-        })
+        )
         break
 
       case 'hasMany':
-        query.leftJoin(`${relationInfo.table} as ${relationName}`, function () {
-          this.on(
-            `${relationName}.${relationInfo.foreignKey}`,
-            `${table}.${relationInfo.primaryKey}`
-          )
+        query[joinType](
+          `${relationInfo.table} as ${relationName}`,
+          function () {
+            this.on(
+              `${relationName}.${relationInfo.foreignKey}`,
+              `${table}.${relationInfo.primaryKey}`
+            )
 
-          if (joinOptions.where) {
-            applyJoinConditions(this, relationName, joinOptions.where)
+            if (joinConditions) {
+              applyJoinConditions(this, relationName, joinConditions)
+            }
           }
-        })
+        )
         break
 
-      case 'manyToMany':
-        query
-          .leftJoin(
-            relationInfo.through.table,
-            `${table}.${relationInfo.primaryKey}`,
-            `${relationInfo.through.table}.${relationInfo.through.foreignKey} as ${relationName}`
-          )
-          .leftJoin(`${relationInfo.table} as ${relationName}`, function () {
+      case 'manyToMany': {
+        const firstJoin = query[joinType](
+          relationInfo.through.table,
+          `${table}.${relationInfo.primaryKey}`,
+          `${relationInfo.through.table}.${relationInfo.through.foreignKey} as ${relationName}`
+        )
+        firstJoin[joinType](
+          `${relationInfo.table} as ${relationName}`,
+          function () {
             this.on(
               `${relationInfo.through.table}.${relationInfo.through.otherKey}`,
               `${table}.${relationInfo.primaryKey}`
             )
 
-            if (joinOptions.where) {
-              applyJoinConditions(this, relationInfo.table, joinOptions.where)
+            if (joinConditions) {
+              applyJoinConditions(this, relationInfo.table, joinConditions)
             }
-          })
+          }
+        )
         break
+      }
     }
 
     // Process nested joins if relation has its own relations defined
@@ -380,9 +395,9 @@ function applyJoinConditions(joinQuery, table, conditions) {
       return
     }
 
-    // If conditions is a primitive value, use equality
+    // If conditions is a primitive value, use equality with parameterization
     if (typeof fieldConditions !== 'object') {
-      joinQuery.andOn(`${table}.${field}`, '=', fieldConditions)
+      joinQuery.andOnVal(`${table}.${field}`, '=', fieldConditions)
       return
     }
 
@@ -395,30 +410,30 @@ function applyJoinConditions(joinQuery, table, conditions) {
   return joinQuery
 }
 
-// Helper function to apply the right join operator
+// Helper function to apply the right join operator with parameterization
 function applyJoinOperator(joinQuery, field, operator, value) {
   switch (operator) {
     case 'equals':
-      joinQuery.andOn(`${field}`, '=', value)
+      joinQuery.andOnVal(`${field}`, '=', value)
       break
     case 'not':
       if (value === null) {
         joinQuery.andOnNotNull(`${field}`)
       } else {
-        joinQuery.andOn(`${field}`, '!=', value)
+        joinQuery.andOnVal(`${field}`, '!=', value)
       }
       break
     case 'gt':
-      joinQuery.andOn(`${field}`, '>', value)
+      joinQuery.andOnVal(`${field}`, '>', value)
       break
     case 'gte':
-      joinQuery.andOn(`${field}`, '>=', value)
+      joinQuery.andOnVal(`${field}`, '>=', value)
       break
     case 'lt':
-      joinQuery.andOn(`${field}`, '<', value)
+      joinQuery.andOnVal(`${field}`, '<', value)
       break
     case 'lte':
-      joinQuery.andOn(`${field}`, '<=', value)
+      joinQuery.andOnVal(`${field}`, '<=', value)
       break
     case 'contains': {
       // PostgreSQL optimization - use ILIKE for case-insensitive search
@@ -428,7 +443,7 @@ function applyJoinOperator(joinQuery, field, operator, value) {
         joinQuery.client.config.client === 'pg'
           ? 'ilike'
           : 'like'
-      joinQuery.andOn(`${field}`, containsOperator, `%${value}%`)
+      joinQuery.andOnVal(`${field}`, containsOperator, `%${value}%`)
       break
     }
     case 'startsWith': {
@@ -438,7 +453,7 @@ function applyJoinOperator(joinQuery, field, operator, value) {
         joinQuery.client.config.client === 'pg'
           ? 'ilike'
           : 'like'
-      joinQuery.andOn(`${field}`, startsWithOperator, `${value}%`)
+      joinQuery.andOnVal(`${field}`, startsWithOperator, `${value}%`)
       break
     }
     case 'endsWith': {
@@ -448,7 +463,7 @@ function applyJoinOperator(joinQuery, field, operator, value) {
         joinQuery.client.config.client === 'pg'
           ? 'ilike'
           : 'like'
-      joinQuery.andOn(`${field}`, endsWithOperator, `%${value}`)
+      joinQuery.andOnVal(`${field}`, endsWithOperator, `%${value}`)
       break
     }
     case 'in':
