@@ -194,9 +194,161 @@ function buildMakeTransaction(knexInstance) {
   }
 }
 
+function processJoins(query, table, joins, relations) {
+  if (!joins || !relations) {
+    return
+  }
+
+  Object.entries(joins).forEach(([relationName, options]) => {
+    const relationInfo = relations[relationName]
+    if (!relationInfo) {
+      throw new Error(
+        `Relation '${relationName}' not found in relations config`
+      )
+    }
+
+    const joinOptions = options === true ? {} : options
+
+    // Select columns with aliases
+    const columns = relationInfo
+      .modelDefinition()
+      .columns.map(col => `${relationName}.${col} as ${relationName}_${col}`)
+    query.select(columns)
+
+    switch (relationInfo.type) {
+      case 'belongsTo':
+        query.leftJoin(`${relationInfo.table} as ${relationName}`, function () {
+          this.on(
+            `${relationName}.${relationInfo.foreignKey}`,
+            `${table}.${relationInfo.primaryKey}`
+          )
+
+          if (joinOptions.where) {
+            applyJoinConditions(this, relationInfo.table, joinOptions.where)
+          }
+        })
+        break
+
+      case 'hasMany':
+        query.leftJoin(`${relationInfo.table} as ${relationName}`, function () {
+          this.on(
+            `${relationName}.${relationInfo.foreignKey}`,
+            `${table}.${relationInfo.primaryKey}`
+          )
+
+          if (joinOptions.where) {
+            //applyJoinConditions(this, relationInfo.table, joinOptions.where)
+            applyWhereClauses(
+              query,
+              table,
+              { where: joinOptions.where },
+              relations
+            )
+          }
+        })
+        break
+
+      case 'manyToMany':
+        query
+          .leftJoin(
+            relationInfo.through.table,
+            `${table}.${relationInfo.primaryKey}`,
+            `${relationInfo.through.table}.${relationInfo.through.foreignKey} as ${relationName}`
+          )
+          .leftJoin(`${relationInfo.table} as ${relationName}`, function () {
+            this.on(
+              `${relationInfo.through.table}.${relationInfo.through.otherKey}`,
+              `${table}.${relationInfo.primaryKey}`
+            )
+
+            if (joinOptions.where) {
+              applyJoinConditions(this, relationInfo.table, joinOptions.where)
+            }
+          })
+        break
+    }
+
+    // Process nested joins if relation has its own relations defined
+    if (joinOptions.join && relationInfo.relations) {
+      processJoins(
+        query,
+        relationInfo.table,
+        joinOptions.join,
+        relationInfo.relations
+      )
+    }
+  })
+}
+
+function applyJoinConditions(joinQuery, table, conditions) {
+  Object.entries(conditions).forEach(([field, condition]) => {
+    // Handle null
+    if (condition === null) {
+      joinQuery.andOnNull(`${table}.${field}`)
+      return
+    }
+
+    // Handle direct value equality
+    if (typeof condition !== 'object') {
+      joinQuery.andOn(`${table}.${field}`, '=', condition)
+      return
+    }
+
+    // Handle operators - matching all our where operators
+    Object.entries(condition).forEach(([operator, value]) => {
+      switch (operator) {
+        case 'equals':
+          joinQuery.andOn(`${table}.${field}`, '=', value)
+          break
+        case 'not':
+          if (value === null) {
+            joinQuery.andOnNotNull(`${table}.${field}`)
+          } else {
+            joinQuery.andOn(`${table}.${field}`, '!=', value)
+          }
+          break
+        case 'gt':
+          joinQuery.andOn(`${table}.${field}`, '>', value)
+          break
+        case 'gte':
+          joinQuery.andOn(`${table}.${field}`, '>=', value)
+          break
+        case 'lt':
+          joinQuery.andOn(`${table}.${field}`, '<', value)
+          break
+        case 'lte':
+          joinQuery.andOn(`${table}.${field}`, '<=', value)
+          break
+        case 'contains':
+          joinQuery.andOn(`${table}.${field}`, 'like', `%${value}%`)
+          break
+        case 'startsWith':
+          joinQuery.andOn(`${table}.${field}`, 'like', `${value}%`)
+          break
+        case 'endsWith':
+          joinQuery.andOn(`${table}.${field}`, 'like', `%${value}`)
+          break
+        case 'in':
+          joinQuery.andOnIn(
+            `${table}.${field}`,
+            Array.isArray(value) ? value : [value]
+          )
+          break
+        case 'notIn':
+          joinQuery.andOnNotIn(
+            `${table}.${field}`,
+            Array.isArray(value) ? value : [value]
+          )
+          break
+      }
+    })
+  })
+}
+
 module.exports = {
   applyWhereClauses,
   applyPagingClauses,
   applySortingClauses,
+  processJoins,
   buildMakeTransaction
 }

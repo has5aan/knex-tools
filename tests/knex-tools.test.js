@@ -1,5 +1,6 @@
 const { createInMemoryEmptyDatabase } = require('./setup')
 const knexTools = require('../src/knex-tools')
+const folderModel = require('./models/folder.model')
 
 describe('knexTools', () => {
   let db
@@ -383,4 +384,63 @@ describe('knexTools', () => {
       expect(query.toSQL().bindings).toEqual(expected.bindings)
     })
   })
+
+  describe('processJoins', () => {
+    describe('one to many join', () => {
+      const testCases = [
+        {
+          name: 'one to many join',
+          parameters: {
+            join: {
+              children: {
+                join: {
+                  children: {}
+                },
+                where: {
+                  user_id: { gt: 0, not: 2 }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select * from `folder` left join `folder` as `children` on `folder`.`id` = `children`.`parent_id`',
+            bindings: []
+          }
+        }
+      ]
+
+      testCases.forEach(({ name, parameters, expected }) => {
+        it(name, () => {
+          const query = db('folder').select('*')
+          knexTools.processJoins(
+            query,
+            'folder',
+            parameters.join,
+            folderModel.relations
+          )
+          expect(query.toSQL().sql).toMatch(expected.sql)
+          expect(query.toSQL().bindings).toEqual(expected.bindings)
+        })
+      })
+    })
+  })
 })
+
+// const _ = require('lodash');
+
+// const groupedResults = _(results)
+//   .groupBy('id')
+//   .map(rows => {
+//     const parent = _.omit(rows[0], key => key.startsWith('children_'));
+//     const children = _(rows)
+//       .filter('children_id')
+//       .map(row => _(row)
+//         .pickBy((value, key) => key.startsWith('children_'))
+//         .mapKeys((value, key) => key.replace('children_', ''))
+//         .value()
+//       )
+//       .value();
+
+//     return { ...parent, children };
+//   })
+//   .value();
