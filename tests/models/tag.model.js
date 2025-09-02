@@ -1,9 +1,19 @@
 module.exports = {
   tableName: 'tag',
+  alias: 't',
   columns: ['id', 'name', 'created_at', 'updated_at'],
   projections: {
-    details: ['id', 'name', 'created_at', 'updated_at'],
-    short: ['id', 'name']
+    details: function (_, alias) {
+      return [
+        `${alias}.id`,
+        `${alias}.name`,
+        `${alias}.created_at`,
+        `${alias}.updated_at`
+      ]
+    },
+    short: function (_, alias) {
+      return [`${alias}.id`, `${alias}.name`]
+    }
   },
   relations: {
     user: {

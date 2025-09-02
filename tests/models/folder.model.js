@@ -1,9 +1,21 @@
 module.exports = {
   tableName: 'folder',
+  alias: 'f',
   columns: ['id', 'user_id', 'parent_id', 'name', 'created_at', 'updated_at'],
   projections: {
-    details: ['id', 'name', 'parent_id', 'created_at', 'updated_at'],
-    short: ['id', 'name']
+    details: function (_, alias) {
+      return [
+        `${alias}.id`,
+        `${alias}.name`,
+        `${alias}.user_id`,
+        `${alias}.parent_id`,
+        `${alias}.created_at`,
+        `${alias}.updated_at`
+      ]
+    },
+    short: function (_, alias) {
+      return [`${alias}.id`, `${alias}.name`]
+    }
   },
   relations: {
     parent: {

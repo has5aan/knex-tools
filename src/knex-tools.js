@@ -43,7 +43,13 @@ function applyWhereClauses(query, table, criteria, relations) {
       return
     }
 
-    // Skip special properties
+    // Handle _exists for RLS functionality
+    if (field === '_exists') {
+      applyExistsClause(query, table, fieldConditions, relations)
+      return
+    }
+
+    // Skip other special properties
     if (field.startsWith('_')) {
       return
     }
@@ -160,6 +166,85 @@ function applyOperator(query, table, field, operator, value) {
   }
 }
 
+// Helper function to apply EXISTS clauses for RLS functionality
+function applyExistsClause(query, table, existsConditions, relations) {
+  if (!relations) {
+    throw new Error('Relations must be provided to use _exists functionality')
+  }
+
+  Object.entries(existsConditions).forEach(([relationName, conditions]) => {
+    const relation = relations[relationName]
+    if (!relation) {
+      throw new Error(
+        `Relation '${relationName}' not found in relations config`
+      )
+    }
+
+    // Use relationName as alias (consistent with processJoins pattern)
+    const alias = relationName
+
+    // Build the EXISTS subquery based on relation type
+    query.whereExists(subquery => {
+      subquery.select(1)
+
+      switch (relation.type) {
+        case 'belongsTo':
+          // main_table has foreign_key, related_table has primary_key
+          // EXISTS (SELECT 1 FROM related_table WHERE related_table.primary_key = main_table.foreign_key)
+          subquery
+            .from(`${relation.table} as ${alias}`)
+            .where(
+              `${alias}.${relation.primaryKey}`,
+              '=',
+              query.client.raw(`${table}.${relation.foreignKey}`)
+            )
+          break
+
+        case 'hasMany':
+          // related_table has foreign_key, main_table has primary_key
+          // EXISTS (SELECT 1 FROM related_table WHERE related_table.foreign_key = main_table.primary_key)
+          subquery
+            .from(`${relation.table} as ${alias}`)
+            .where(
+              `${alias}.${relation.foreignKey}`,
+              '=',
+              query.client.raw(`${table}.${relation.primaryKey}`)
+            )
+          break
+
+        case 'manyToMany': {
+          // Need to join through junction table
+          // EXISTS (SELECT 1 FROM junction_table JOIN related_table WHERE junction.main_key = main_table.primary_key)
+          const junctionTable = relation.through.table
+          subquery
+            .from(junctionTable)
+            .join(
+              `${relation.table} as ${alias}`,
+              `${junctionTable}.${relation.through.otherKey}`,
+              `${alias}.${relation.primaryKey || 'id'}`
+            )
+            .where(
+              `${junctionTable}.${relation.through.foreignKey}`,
+              '=',
+              query.client.raw(`${table}.${relation.primaryKey || 'id'}`)
+            )
+          break
+        }
+
+        default:
+          throw new Error(
+            `Unsupported relation type '${relation.type}' for _exists`
+          )
+      }
+
+      // Use applyWhereClauses for full operator support (logical operators, _condition flags, etc.)
+      applyWhereClauses(subquery, alias, { where: conditions }, relations)
+    })
+  })
+
+  return query
+}
+
 function applyPagingClauses(query, criteria) {
   if (!criteria) {
     return query
@@ -211,7 +296,7 @@ function buildMakeTransaction(knexInstance) {
   }
 }
 
-function processJoins(query, table, joins, relations) {
+function processJoins(query, rootModel, joins, relations) {
   if (!joins || !relations) {
     return
   }
@@ -235,90 +320,114 @@ function processJoins(query, table, joins, relations) {
     // Extract WHERE conditions (post-join filtering)
     const whereConditions = joinOptions.where
 
+    // Get the relation model to access its alias
+    const relationModel = relationInfo.modelDefinition()
+    // For self-referencing relationships, use relationName as alias to avoid conflicts
+    // For other relationships, use model alias if available, otherwise fallback to relationName
+    const relationAlias =
+      relationModel.tableName === rootModel.tableName
+        ? relationName // Use relationName for self-referencing to avoid alias conflicts
+        : relationModel.alias || relationName
+
     // Select columns with aliases
-    const columns = relationInfo
-      .modelDefinition()
-      .columns.map(col => `${relationName}.${col} as ${relationName}_${col}`)
+    const columns = relationModel.columns.map(
+      col => `${relationAlias}.${col} as ${relationName}_${col}`
+    )
     query.select(columns)
 
     switch (relationInfo.type) {
       case 'belongsTo':
         query[joinType](
-          `${relationInfo.table} as ${relationName}`,
+          `${relationInfo.table} as ${relationAlias}`,
           function () {
             this.on(
-              `${relationName}.${relationInfo.primaryKey}`,
-              `${table}.${relationInfo.foreignKey}`
+              `${relationAlias}.${relationInfo.primaryKey}`,
+              `${rootModel.alias}.${relationInfo.foreignKey}`
             )
 
             if (joinConditions) {
-              applyJoinConditions(this, relationName, joinConditions)
+              applyJoinConditions(this, relationAlias, joinConditions)
             }
           }
         )
 
         // Apply post-join WHERE filtering if both 'on' and 'where' are specified
         if (joinConditions && whereConditions) {
-          applyWhereClauses(query, relationName, { where: whereConditions })
+          applyWhereClauses(
+            query,
+            relationAlias,
+            { where: whereConditions },
+            relations
+          )
         }
         break
 
       case 'hasMany':
         query[joinType](
-          `${relationInfo.table} as ${relationName}`,
+          `${relationInfo.table} as ${relationAlias}`,
           function () {
             this.on(
-              `${relationName}.${relationInfo.foreignKey}`,
-              `${table}.${relationInfo.primaryKey}`
+              `${relationAlias}.${relationInfo.foreignKey}`,
+              `${rootModel.alias}.${relationInfo.primaryKey}`
             )
 
             if (joinConditions) {
-              applyJoinConditions(this, relationName, joinConditions)
+              applyJoinConditions(this, relationAlias, joinConditions)
             }
           }
         )
 
         // Apply post-join WHERE filtering if both 'on' and 'where' are specified
         if (joinConditions && whereConditions) {
-          applyWhereClauses(query, relationName, { where: whereConditions })
+          applyWhereClauses(
+            query,
+            relationAlias,
+            { where: whereConditions },
+            relations
+          )
         }
         break
 
       case 'manyToMany': {
         query[joinType](
           relationInfo.through.table,
-          `${table}.${relationInfo.primaryKey || 'id'}`,
+          `${rootModel.alias}.${relationInfo.primaryKey || 'id'}`,
           `${relationInfo.through.table}.${relationInfo.through.foreignKey}`
         )
         query[joinType](
-          `${relationInfo.table} as ${relationName}`,
+          `${relationInfo.table} as ${relationAlias}`,
           function () {
             this.on(
               `${relationInfo.through.table}.${relationInfo.through.otherKey}`,
-              `${relationName}.${relationInfo.primaryKey || 'id'}`
+              `${relationAlias}.${relationInfo.primaryKey || 'id'}`
             )
 
             if (joinConditions) {
-              applyJoinConditions(this, relationName, joinConditions)
+              applyJoinConditions(this, relationAlias, joinConditions)
             }
           }
         )
 
         // Apply post-join WHERE filtering if both 'on' and 'where' are specified
         if (joinConditions && whereConditions) {
-          applyWhereClauses(query, relationName, { where: whereConditions })
+          applyWhereClauses(
+            query,
+            relationAlias,
+            { where: whereConditions },
+            relations
+          )
         }
         break
       }
     }
 
     // Process nested joins if relation has its own relations defined
-    if (joinOptions.join && relationInfo.relations) {
+    if (joinOptions.join && relationModel.relations) {
       processJoins(
         query,
-        relationInfo.table,
+        relationModel,
         joinOptions.join,
-        relationInfo.relations
+        relationModel.relations
       )
     }
   })
@@ -476,11 +585,293 @@ function applyJoinOperator(joinQuery, field, operator, value) {
   }
 }
 
+async function buildQuery(knexInstance, modelObject, queryConfig) {
+  // Execute main query with alias
+  const query = knexInstance(`${modelObject.tableName} as ${modelObject.alias}`)
+
+  // Apply projection
+  if (queryConfig.projection) {
+    if (typeof queryConfig.projection === 'string') {
+      // Use predefined projection from model
+      const projection = modelObject.projections[queryConfig.projection]
+      if (!projection) {
+        throw new Error(
+          `Projection '${queryConfig.projection}' not found in model`
+        )
+      }
+      // All projections are functions that receive (knexInstance, alias)
+      const projectionColumns = projection(knexInstance, modelObject.alias)
+      query.select(projectionColumns)
+    } else if (Array.isArray(queryConfig.projection)) {
+      // Internal use only - for when populate functions modify projections to include foreign keys
+      query.select(queryConfig.projection)
+    }
+  } else {
+    // Default to all columns
+    query.select('*')
+  }
+
+  // Apply where clauses
+  if (queryConfig.where) {
+    applyWhereClauses(
+      query,
+      modelObject.alias,
+      { where: queryConfig.where },
+      modelObject.relations
+    )
+  }
+
+  // Apply sorting
+  if (queryConfig.orderBy) {
+    applySortingClauses(query, modelObject.alias, queryConfig.orderBy, {
+      field: 'id',
+      direction: 'asc'
+    })
+  }
+
+  // Apply paging
+  if (queryConfig.take || queryConfig.skip) {
+    applyPagingClauses(query, {
+      take: queryConfig.take,
+      skip: queryConfig.skip
+    })
+  }
+
+  // Execute main query
+  const records = await query
+
+  // Process 'each' relations for every record
+  if (queryConfig.each && records.length > 0) {
+    await populateEachRelations(
+      knexInstance,
+      records,
+      modelObject,
+      queryConfig.each
+    )
+  }
+
+  return records
+}
+
+async function populateEachRelations(
+  knexInstance,
+  records,
+  modelObject,
+  eachConfig
+) {
+  for (const [relationKey, relationQuery] of Object.entries(eachConfig)) {
+    const relation = modelObject.relations[relationKey]
+    if (!relation) {
+      throw new Error(`Relation '${relationKey}' not found in model`)
+    }
+
+    const relatedModel = relation.modelDefinition()
+
+    // Handle different relation types
+    switch (relation.type) {
+      case 'belongsTo':
+        await populateBelongsToRelation(
+          knexInstance,
+          records,
+          relation,
+          relatedModel,
+          relationKey,
+          relationQuery
+        )
+        break
+      case 'hasMany':
+        await populateHasManyRelation(
+          knexInstance,
+          records,
+          relation,
+          relatedModel,
+          relationKey,
+          relationQuery
+        )
+        break
+      case 'manyToMany':
+        await populateManyToManyRelation(
+          knexInstance,
+          records,
+          relation,
+          relatedModel,
+          relationKey,
+          relationQuery
+        )
+        break
+    }
+  }
+}
+
+async function populateBelongsToRelation(
+  knexInstance,
+  records,
+  relation,
+  relatedModel,
+  relationKey,
+  relationQuery
+) {
+  // Get unique foreign key values
+  const foreignKeys = [
+    ...new Set(
+      records.map(record => record[relation.foreignKey]).filter(Boolean)
+    )
+  ]
+  if (foreignKeys.length === 0) {
+    return
+  }
+
+  // Build query for related records
+  const relatedRecords = await buildQuery(knexInstance, relatedModel, {
+    ...relationQuery,
+    where: {
+      ...relationQuery.where,
+      [relation.primaryKey]: { in: foreignKeys }
+    }
+  })
+
+  // Create lookup map
+  const relatedMap = new Map(
+    relatedRecords.map(record => [record[relation.primaryKey], record])
+  )
+
+  // Attach related records to main records
+  records.forEach(record => {
+    record[relationKey] = relatedMap.get(record[relation.foreignKey]) || null
+  })
+}
+
+async function populateHasManyRelation(
+  knexInstance,
+  records,
+  relation,
+  relatedModel,
+  relationKey,
+  relationQuery
+) {
+  // Get unique primary key values
+  const primaryKeys = [
+    ...new Set(
+      records.map(record => record[relation.primaryKey]).filter(Boolean)
+    )
+  ]
+  if (primaryKeys.length === 0) {
+    return
+  }
+
+  // Build query for related records
+  // Ensure foreign key is included in projection for proper grouping
+  let projection = relationQuery.projection
+  if (typeof projection === 'string' && relatedModel.projections[projection]) {
+    // All projections are functions that receive (db, alias)
+    let projectionColumns = relatedModel.projections[projection](
+      knexInstance,
+      relatedModel.alias
+    )
+    // Check if foreign key is included
+    if (
+      Array.isArray(projectionColumns) &&
+      !projectionColumns.includes(relation.foreignKey)
+    ) {
+      projection = [...projectionColumns, relation.foreignKey]
+    }
+  }
+
+  const relatedRecords = await buildQuery(knexInstance, relatedModel, {
+    ...relationQuery,
+    projection,
+    where: {
+      ...relationQuery.where,
+      [relation.foreignKey]: { in: primaryKeys }
+    }
+  })
+
+  // Group related records by foreign key
+  const relatedMap = new Map()
+  relatedRecords.forEach(record => {
+    const key = record[relation.foreignKey]
+    if (!relatedMap.has(key)) {
+      relatedMap.set(key, [])
+    }
+    relatedMap.get(key).push(record)
+  })
+
+  // Attach related records to main records
+  records.forEach(record => {
+    record[relationKey] = relatedMap.get(record[relation.primaryKey]) || []
+  })
+}
+
+async function populateManyToManyRelation(
+  knexInstance,
+  records,
+  relation,
+  relatedModel,
+  relationKey,
+  relationQuery
+) {
+  // Get unique primary key values
+  const primaryKeys = [
+    ...new Set(
+      records.map(record => record[relation.primaryKey || 'id']).filter(Boolean)
+    )
+  ]
+  if (primaryKeys.length === 0) {
+    return
+  }
+
+  // First get the junction table records
+  const junctionRecords = await knexInstance(relation.through.table)
+    .select([relation.through.foreignKey, relation.through.otherKey])
+    .whereIn(relation.through.foreignKey, primaryKeys)
+
+  // Get unique other keys
+  const otherKeys = [
+    ...new Set(junctionRecords.map(record => record[relation.through.otherKey]))
+  ]
+  if (otherKeys.length === 0) {
+    return
+  }
+
+  // Build query for related records
+  const relatedRecords = await buildQuery(knexInstance, relatedModel, {
+    ...relationQuery,
+    where: {
+      ...relationQuery.where,
+      [relation.primaryKey || 'id']: { in: otherKeys }
+    }
+  })
+
+  // Create lookup map for related records
+  const relatedMap = new Map(
+    relatedRecords.map(record => [record[relation.primaryKey || 'id'], record])
+  )
+
+  // Group junction records by foreign key
+  const junctionMap = new Map()
+  junctionRecords.forEach(record => {
+    const key = record[relation.through.foreignKey]
+    if (!junctionMap.has(key)) {
+      junctionMap.set(key, [])
+    }
+    junctionMap.get(key).push(record[relation.through.otherKey])
+  })
+
+  // Attach related records to main records
+  records.forEach(record => {
+    const otherKeys = junctionMap.get(record[relation.primaryKey || 'id']) || []
+    record[relationKey] = otherKeys
+      .map(key => relatedMap.get(key))
+      .filter(Boolean)
+  })
+}
+
 module.exports = {
   applyWhereClauses,
   applyPagingClauses,
   applySortingClauses,
   applyJoinConditions,
   processJoins,
-  buildMakeTransaction
+  buildMakeTransaction,
+  buildQuery
 }

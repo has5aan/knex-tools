@@ -1,5 +1,6 @@
 module.exports = {
   tableName: 'user',
+  alias: 'u',
   columns: [
     'id',
     'name',
@@ -12,18 +13,22 @@ module.exports = {
     'updated_at'
   ],
   projections: {
-    details: [
-      'id',
-      'name',
-      'email',
-      'role',
-      'active',
-      'premium',
-      'verified',
-      'created_at',
-      'updated_at'
-    ],
-    short: ['id', 'name', 'email']
+    details: function (_, alias) {
+      return [
+        `${alias}.id`,
+        `${alias}.name`,
+        `${alias}.email`,
+        `${alias}.role`,
+        `${alias}.active`,
+        `${alias}.premium`,
+        `${alias}.verified`,
+        `${alias}.created_at`,
+        `${alias}.updated_at`
+      ]
+    },
+    short: function (_, alias) {
+      return [`${alias}.id`, `${alias}.name`, `${alias}.email`]
+    }
   },
   relations: {
     folders: {
@@ -33,6 +38,14 @@ module.exports = {
       foreignKey: 'user_id',
       primaryKey: 'id',
       modelDefinition: () => require('./folder.model')
+    },
+    memos: {
+      type: 'hasMany',
+      model: 'memo',
+      table: 'memo',
+      foreignKey: 'user_id',
+      primaryKey: 'id',
+      modelDefinition: () => require('./memo.model')
     }
   }
 }
