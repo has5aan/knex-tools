@@ -589,6 +589,27 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
   // Execute main query with alias
   const query = knexInstance(`${modelObject.tableName} as ${modelObject.alias}`)
 
+  // Apply default modifier if present
+  if (modelObject.modifiers && modelObject.modifiers.default) {
+    modelObject.modifiers.default(query, knexInstance, modelObject.alias)
+  }
+
+  // Apply requested modifiers with parameters
+  if (queryConfig.modifiers && modelObject.modifiers) {
+    Object.entries(queryConfig.modifiers).forEach(([modifierName, params]) => {
+      const modifier = modelObject.modifiers[modifierName]
+      if (!modifier) {
+        throw new Error(`Modifier '${modifierName}' not found in model`)
+      }
+      // Skip default modifier as it's already applied
+      if (modifierName === 'default') {
+        return
+      }
+      // Apply modifier with destructured parameters
+      modifier(query, knexInstance, modelObject.alias, params)
+    })
+  }
+
   // Apply projection
   if (queryConfig.projection) {
     if (typeof queryConfig.projection === 'string') {

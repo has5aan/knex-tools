@@ -52,10 +52,10 @@ module.exports = {
     }
   },
   modifiers: {
-    forUser: (query, userId) => {
-      query.innerJoin('user', {
-        'folder.user_id': 'user.id',
-        'user.id': userId
+    forUser: (query, knexInstance, tableAlias, { userId }) => {
+      query.innerJoin('user as u', {
+        [`${tableAlias}.user_id`]: 'u.id',
+        'u.id': userId
       })
     }
   }

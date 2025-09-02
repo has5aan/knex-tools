@@ -1579,24 +1579,59 @@ describe('knexTools', () => {
         }
       )
     })
+
+    describe('modifiers', () => {
+      const longMemoModel = require('./models/long-memo.model')
+      const memoModel = require('./models/memo.model')
+
+      const testCases = [
+        {
+          name: 'applies default modifier automatically',
+          model: longMemoModel,
+          queryConfig: {
+            projection: 'basic'
+          },
+          expected: {
+            length: 1, // Only long content memos (> 15 chars)
+            firstContent: 'Important meeting notes'
+          }
+        },
+        {
+          name: 'applies parameterized modifier with object parameters',
+          model: memoModel,
+          queryConfig: {
+            projection: 'details',
+            modifiers: {
+              forUser: { userId: 1 }
+            }
+          },
+          expected: {
+            length: 2, // User 1 has 2 memos
+            userIds: [1, 1] // Both should have user_id = 1
+          }
+        }
+      ]
+
+      test.each(testCases)(
+        '$name',
+        async ({ model, queryConfig, expected }) => {
+          const result = await knexTools.buildQuery(db, model, queryConfig)
+
+          expect(result).toHaveLength(expected.length)
+
+          if (expected.firstContent) {
+            expect(result[0].content).toBe(expected.firstContent)
+          }
+
+          if (expected.secondContent) {
+            expect(result[1].content).toBe(expected.secondContent)
+          }
+
+          if (expected.userIds) {
+            expect(result.map(r => r.user_id)).toEqual(expected.userIds)
+          }
+        }
+      )
+    })
   })
 })
-
-// const _ = require('lodash');
-
-// const groupedResults = _(results)
-//   .groupBy('id')
-//   .map(rows => {
-//     const parent = _.omit(rows[0], key => key.startsWith('children_'));
-//     const children = _(rows)
-//       .filter('children_id')
-//       .map(row => _(row)
-//         .pickBy((value, key) => key.startsWith('children_'))
-//         .mapKeys((value, key) => key.replace('children_', ''))
-//         .value()
-//       )
-//       .value();
-
-//     return { ...parent, children };
-//   })
-//   .value();
