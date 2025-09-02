@@ -1,6 +1,13 @@
 module.exports = {
   tableName: 'memo',
-
+  columns: [
+    'id',
+    'user_id',
+    'folder_id',
+    'content',
+    'created_at',
+    'updated_at'
+  ],
   projections: {
     details: [
       'id',

@@ -252,20 +252,31 @@ describe('knexTools', () => {
           }
         },
         {
-          name: 'NOT logical operator',
+          name: 'hasAll operator with single value',
           parameters: {
             criteria: {
               where: {
-                NOT: {
-                  user_id: { gt: 0, not: 2 },
-                  name: 'Test Folder'
-                }
+                tags: { hasAll: ['urgent'] }
               }
             }
           },
           expected: {
-            sql: 'select * from `folder` where not (`folder`.`user_id` > ? and `folder`.`user_id` != ? and `folder`.`name` = ?)',
-            bindings: [0, 2, 'Test Folder']
+            sql: 'with `tags_hasall_values` as (select ? as value) select * from `folder` where exists (select 1 from `tags_hasall_values` where `tags_hasall_values`.value = `folder`.`tags` having COUNT(*) = ?)',
+            bindings: ['urgent', 1]
+          }
+        },
+        {
+          name: 'hasAll operator with multiple values',
+          parameters: {
+            criteria: {
+              where: {
+                tags: { hasAll: ['urgent', 'priority'] }
+              }
+            }
+          },
+          expected: {
+            sql: 'with `tags_hasall_values` as (select ? as value union select ? as value) select * from `folder` where exists (select 1 from `tags_hasall_values` where `tags_hasall_values`.value = `folder`.`tags` having COUNT(*) = ?)',
+            bindings: ['urgent', 'priority', 2]
           }
         }
       ]
@@ -615,21 +626,6 @@ describe('knexTools', () => {
           }
         },
         {
-          name: 'NOT logical operator in join conditions',
-          parameters: {
-            joinConditions: {
-              NOT: {
-                banned: true,
-                deleted_at: { isNotNull: true }
-              }
-            }
-          },
-          expected: {
-            sql: 'left join `user` on ((`user`.`banned` != `true` and `user`.`deleted_at` is not null))',
-            bindings: []
-          }
-        },
-        {
           name: 'complex nested logical operators in join conditions',
           parameters: {
             joinConditions: {
@@ -696,11 +692,11 @@ describe('knexTools', () => {
           }
         },
         {
-          name: 'one to many join with where conditions',
+          name: 'one to many join with on conditions',
           parameters: {
             join: {
               children: {
-                where: {
+                on: {
                   user_id: { gt: 0, not: 2 }
                 }
               }
@@ -721,6 +717,292 @@ describe('knexTools', () => {
             'folder',
             parameters.join,
             folderModel.relations
+          )
+          expect(query.toSQL().sql).toMatch(expected.sql)
+          expect(query.toSQL().bindings).toEqual(expected.bindings)
+        })
+      })
+    })
+
+    describe('joins with both on and where conditions', () => {
+      const testCases = [
+        {
+          name: 'belongsTo join with both on and where conditions',
+          parameters: {
+            join: {
+              user: {
+                on: {
+                  active: true
+                },
+                where: {
+                  role: 'admin'
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `user`.`id` as `user_id`, `user`.`name` as `user_name`, `user`.`email` as `user_email`, `user`.`role` as `user_role`, `user`.`active` as `user_active`, `user`.`premium` as `user_premium`, `user`.`verified` as `user_verified`, `user`.`created_at` as `user_created_at`, `user`.`updated_at` as `user_updated_at` from `folder` left join `user` as `user` on `user`.`id` = `folder`.`user_id` and `user`.`active` = ? where `user`.`role` = ?',
+            bindings: [true, 'admin']
+          }
+        },
+        {
+          name: 'hasMany join with complex on and where conditions',
+          parameters: {
+            join: {
+              children: {
+                on: {
+                  user_id: { gt: 0 },
+                  name: { contains: 'test' }
+                },
+                where: {
+                  created_at: { gte: '2023-01-01' },
+                  updated_at: { isNotNull: true }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` left join `folder` as `children` on `children`.`parent_id` = `folder`.`id` and `children`.`user_id` > ? and `children`.`name` like ? where `children`.`created_at` >= ? and `children`.`updated_at` is not null',
+            bindings: [0, '%test%', '2023-01-01']
+          }
+        },
+        {
+          name: 'join with logical operators in both on and where',
+          parameters: {
+            join: {
+              user: {
+                on: {
+                  OR: [{ active: true }, { verified: true }]
+                },
+                where: {
+                  AND: [{ role: { in: ['admin', 'user'] } }, { premium: true }]
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `user`.`id` as `user_id`, `user`.`name` as `user_name`, `user`.`email` as `user_email`, `user`.`role` as `user_role`, `user`.`active` as `user_active`, `user`.`premium` as `user_premium`, `user`.`verified` as `user_verified`, `user`.`created_at` as `user_created_at`, `user`.`updated_at` as `user_updated_at` from `folder` left join `user` as `user` on `user`.`id` = `folder`.`user_id` or (`user`.`active` = ?) or (`user`.`verified` = ?) where (`user`.`role` in (?, ?)) and (`user`.`premium` = ?)',
+            bindings: [true, true, 'admin', 'user', true]
+          }
+        },
+        {
+          name: 'enforce join type with both on and where conditions',
+          parameters: {
+            join: {
+              user: {
+                type: 'enforce',
+                on: {
+                  active: true,
+                  role: { not: 'guest' }
+                },
+                where: {
+                  verified: true,
+                  premium: { isNotNull: true }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `user`.`id` as `user_id`, `user`.`name` as `user_name`, `user`.`email` as `user_email`, `user`.`role` as `user_role`, `user`.`active` as `user_active`, `user`.`premium` as `user_premium`, `user`.`verified` as `user_verified`, `user`.`created_at` as `user_created_at`, `user`.`updated_at` as `user_updated_at` from `folder` inner join `user` as `user` on `user`.`id` = `folder`.`user_id` and `user`.`active` = ? and `user`.`role` != ? where `user`.`verified` = ? and `user`.`premium` is not null',
+            bindings: [true, 'guest', true]
+          }
+        },
+        {
+          name: 'join with conditional flags in both on and where',
+          parameters: {
+            join: {
+              user: {
+                on: {
+                  active: { equals: true, _condition: true },
+                  role: { equals: 'admin', _condition: false }
+                },
+                where: {
+                  verified: { equals: true, _condition: true },
+                  premium: { equals: true, _condition: false }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `user`.`id` as `user_id`, `user`.`name` as `user_name`, `user`.`email` as `user_email`, `user`.`role` as `user_role`, `user`.`active` as `user_active`, `user`.`premium` as `user_premium`, `user`.`verified` as `user_verified`, `user`.`created_at` as `user_created_at`, `user`.`updated_at` as `user_updated_at` from `folder` left join `user` as `user` on `user`.`id` = `folder`.`user_id` and `user`.`active` = ? where `user`.`verified` = ?',
+            bindings: [true, true]
+          }
+        }
+      ]
+
+      testCases.forEach(({ name, parameters, expected }) => {
+        it(name, () => {
+          const query = db('folder').select('*')
+          knexTools.processJoins(
+            query,
+            'folder',
+            parameters.join,
+            folderModel.relations
+          )
+          expect(query.toSQL().sql).toMatch(expected.sql)
+          expect(query.toSQL().bindings).toEqual(expected.bindings)
+        })
+      })
+    })
+
+    describe('manyToMany join tests', () => {
+      const testCases = [
+        {
+          name: 'manyToMany join without conditions',
+          parameters: {
+            join: {
+              tags: {}
+            }
+          },
+          expected: {
+            sql: 'select *, `tags`.`id` as `tags_id`, `tags`.`name` as `tags_name`, `tags`.`created_at` as `tags_created_at`, `tags`.`updated_at` as `tags_updated_at` from `memo` left join `memo_tag` on `memo`.`id` = `memo_tag`.`memo_id` left join `tag` as `tags` on `memo_tag`.`tag_id` = `tags`.`id`',
+            bindings: []
+          }
+        },
+        {
+          name: 'manyToMany join with on conditions',
+          parameters: {
+            join: {
+              tags: {
+                on: {
+                  name: { contains: 'important' },
+                  created_at: { gte: '2023-01-01' }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `tags`.`id` as `tags_id`, `tags`.`name` as `tags_name`, `tags`.`created_at` as `tags_created_at`, `tags`.`updated_at` as `tags_updated_at` from `memo` left join `memo_tag` on `memo`.`id` = `memo_tag`.`memo_id` left join `tag` as `tags` on `memo_tag`.`tag_id` = `tags`.`id` and `tags`.`name` like ? and `tags`.`created_at` >= ?',
+            bindings: ['%important%', '2023-01-01']
+          }
+        },
+        {
+          name: 'manyToMany join with both on and where conditions',
+          parameters: {
+            join: {
+              tags: {
+                on: {
+                  name: { startsWith: 'tag_' }
+                },
+                where: {
+                  created_at: { isNotNull: true },
+                  updated_at: { gte: '2023-06-01' }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `tags`.`id` as `tags_id`, `tags`.`name` as `tags_name`, `tags`.`created_at` as `tags_created_at`, `tags`.`updated_at` as `tags_updated_at` from `memo` left join `memo_tag` on `memo`.`id` = `memo_tag`.`memo_id` left join `tag` as `tags` on `memo_tag`.`tag_id` = `tags`.`id` and `tags`.`name` like ? where `tags`.`created_at` is not null and `tags`.`updated_at` >= ?',
+            bindings: ['tag_%', '2023-06-01']
+          }
+        },
+        {
+          name: 'manyToMany enforce join with logical operators',
+          parameters: {
+            join: {
+              tags: {
+                type: 'enforce',
+                on: {
+                  OR: [{ name: 'urgent' }, { name: 'priority' }]
+                },
+                where: {
+                  AND: [
+                    { created_at: { gte: '2023-01-01' } },
+                    { updated_at: { isNotNull: true } }
+                  ]
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `tags`.`id` as `tags_id`, `tags`.`name` as `tags_name`, `tags`.`created_at` as `tags_created_at`, `tags`.`updated_at` as `tags_updated_at` from `memo` inner join `memo_tag` on `memo`.`id` = `memo_tag`.`memo_id` inner join `tag` as `tags` on `memo_tag`.`tag_id` = `tags`.`id` or (`tags`.`name` = ?) or (`tags`.`name` = ?) where (`tags`.`created_at` >= ?) and (`tags`.`updated_at` is not null)',
+            bindings: ['urgent', 'priority', '2023-01-01']
+          }
+        }
+      ]
+
+      testCases.forEach(({ name, parameters, expected }) => {
+        it(name, () => {
+          const memoModel = require('./models/memo.model')
+          const query = db('memo').select('*')
+          knexTools.processJoins(
+            query,
+            'memo',
+            parameters.join,
+            memoModel.relations
+          )
+          expect(query.toSQL().sql).toMatch(expected.sql)
+          expect(query.toSQL().bindings).toEqual(expected.bindings)
+        })
+      })
+    })
+
+    describe('additional join relationship tests', () => {
+      const testCases = [
+        {
+          name: 'belongsTo parent-child self-join',
+          model: 'folder',
+          parameters: {
+            join: {
+              parent: {
+                on: {
+                  name: { contains: 'parent' }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `parent`.`id` as `parent_id`, `parent`.`user_id` as `parent_user_id`, `parent`.`parent_id` as `parent_parent_id`, `parent`.`name` as `parent_name`, `parent`.`created_at` as `parent_created_at`, `parent`.`updated_at` as `parent_updated_at` from `folder` left join `folder` as `parent` on `parent`.`id` = `folder`.`parent_id` and `parent`.`name` like ?',
+            bindings: ['%parent%']
+          }
+        },
+        {
+          name: 'hasMany children self-join with where filter',
+          model: 'folder',
+          parameters: {
+            join: {
+              children: {
+                on: {},
+                where: {
+                  created_at: { gte: '2023-01-01' }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` left join `folder` as `children` on `children`.`parent_id` = `folder`.`id` where `children`.`created_at` >= ?',
+            bindings: ['2023-01-01']
+          }
+        },
+        {
+          name: 'hasMany memos with enforce join type',
+          model: 'folder',
+          parameters: {
+            join: {
+              memos: {
+                type: 'enforce',
+                on: {
+                  content: { contains: 'important' }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `memos`.`id` as `memos_id`, `memos`.`user_id` as `memos_user_id`, `memos`.`folder_id` as `memos_folder_id`, `memos`.`content` as `memos_content`, `memos`.`created_at` as `memos_created_at`, `memos`.`updated_at` as `memos_updated_at` from `folder` inner join `memo` as `memos` on `memos`.`folder_id` = `folder`.`id` and `memos`.`content` like ?',
+            bindings: ['%important%']
+          }
+        }
+      ]
+
+      testCases.forEach(({ name, model, parameters, expected }) => {
+        it(name, () => {
+          const modelDef = require(`./models/${model}.model`)
+          const query = db(model).select('*')
+          knexTools.processJoins(
+            query,
+            model,
+            parameters.join,
+            modelDef.relations
           )
           expect(query.toSQL().sql).toMatch(expected.sql)
           expect(query.toSQL().bindings).toEqual(expected.bindings)

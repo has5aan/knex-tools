@@ -1,5 +1,6 @@
 module.exports = {
   tableName: 'tag',
+  columns: ['id', 'name', 'created_at', 'updated_at'],
   projections: {
     details: ['id', 'name', 'created_at', 'updated_at'],
     short: ['id', 'name']

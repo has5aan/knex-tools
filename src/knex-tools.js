@@ -4,7 +4,7 @@ function applyWhereClauses(query, table, criteria, relations) {
   }
 
   const conditions = criteria.where
-  const logicalOperators = ['OR', 'AND', 'NOT']
+  const logicalOperators = ['OR', 'AND']
   const hasLogicalOps = logicalOperators.some(op => conditions[op])
 
   // Process logical operators
@@ -28,12 +28,6 @@ function applyWhereClauses(query, table, criteria, relations) {
         query.orWhere(builder => {
           applyWhereClauses(builder, table, { where: condition }, relations)
         })
-      })
-    }
-
-    if (conditions.NOT) {
-      query.whereNot(builder => {
-        applyWhereClauses(builder, table, { where: conditions.NOT }, relations)
       })
     }
   }
@@ -79,7 +73,7 @@ function applyWhereClauses(query, table, criteria, relations) {
 
     // Handle multiple operators for the same field
     Object.entries(actualConditions).forEach(([operator, value]) => {
-      applyOperator(query, `${table}.${field}`, operator, value)
+      applyOperator(query, table, field, operator, value)
     })
   })
 
@@ -87,59 +81,82 @@ function applyWhereClauses(query, table, criteria, relations) {
 }
 
 // Helper function to apply the right operator
-function applyOperator(query, field, operator, value) {
+function applyOperator(query, table, field, operator, value) {
   switch (operator) {
     case 'equals':
-      query = query.where(`${field}`, '=', value)
+      query = query.where(`${table}.${field}`, '=', value)
       break
     case 'not':
-      query = query.where(`${field}`, '!=', value)
+      query = query.where(`${table}.${field}`, '!=', value)
       break
     case 'gt':
-      query = query.where(`${field}`, '>', value)
+      query = query.where(`${table}.${field}`, '>', value)
       break
     case 'gte':
-      query = query.where(`${field}`, '>=', value)
+      query = query.where(`${table}.${field}`, '>=', value)
       break
     case 'lt':
-      query = query.where(`${field}`, '<', value)
+      query = query.where(`${table}.${field}`, '<', value)
       break
     case 'lte':
-      query = query.where(`${field}`, '<=', value)
+      query = query.where(`${table}.${field}`, '<=', value)
       break
     case 'contains': {
       const containsOperator =
         query.client.config.client === 'pg' ? 'ilike' : 'like'
-      query = query.where(`${field}`, containsOperator, `%${value}%`)
+      query = query.where(`${table}.${field}`, containsOperator, `%${value}%`)
       break
     }
     case 'startsWith': {
       const startsWithOperator =
         query.client.config.client === 'pg' ? 'ilike' : 'like'
-      query = query.where(`${field}`, startsWithOperator, `${value}%`)
+      query = query.where(`${table}.${field}`, startsWithOperator, `${value}%`)
       break
     }
     case 'endsWith': {
       const endsWithOperator =
         query.client.config.client === 'pg' ? 'ilike' : 'like'
-      query = query.where(`${field}`, endsWithOperator, `%${value}`)
+      query = query.where(`${table}.${field}`, endsWithOperator, `%${value}`)
       break
     }
     case 'in':
-      query = query.whereIn(`${field}`, Array.isArray(value) ? value : [value])
+      query = query.whereIn(
+        `${table}.${field}`,
+        Array.isArray(value) ? value : [value]
+      )
       break
     case 'notIn':
       query = query.whereNotIn(
-        `${field}`,
+        `${table}.${field}`,
         Array.isArray(value) ? value : [value]
       )
       break
     case 'isNull':
-      query = query.whereNull(`${field}`)
+      query = query.whereNull(`${table}.${field}`)
       break
     case 'isNotNull':
-      query = query.whereNotNull(`${field}`)
+      query = query.whereNotNull(`${table}.${field}`)
       break
+    case 'hasAll': {
+      const values = Array.isArray(value) ? value : [value]
+      const cteName = `${field}_hasall_values`
+
+      // Create CTE SQL manually to ensure proper UNION construction
+      const cteSelects = values.map(() => 'select ? as value').join(' union ')
+      const cteQuery = query.client.raw(cteSelects, values)
+
+      // Create CTE with field-specific name
+      query = query.with(cteName, cteQuery)
+
+      // Add EXISTS clause with COUNT
+      query = query.whereExists(function () {
+        this.select(1)
+          .from(cteName)
+          .whereRaw(`??.value = ??.??`, [cteName, table, field])
+          .havingRaw('COUNT(*) = ?', [values.length])
+      })
+      break
+    }
   }
 }
 
@@ -212,8 +229,11 @@ function processJoins(query, table, joins, relations) {
     // Determine join type (enforce = INNER, include = LEFT, default = LEFT)
     const joinType = joinOptions.type === 'enforce' ? 'innerJoin' : 'leftJoin'
 
-    // Extract join conditions - support both new 'on' and legacy 'where'
-    const joinConditions = joinOptions.on || joinOptions.where
+    // Extract join conditions (join-time filtering)
+    const joinConditions = joinOptions.on
+
+    // Extract WHERE conditions (post-join filtering)
+    const whereConditions = joinOptions.where
 
     // Select columns with aliases
     const columns = relationInfo
@@ -227,15 +247,20 @@ function processJoins(query, table, joins, relations) {
           `${relationInfo.table} as ${relationName}`,
           function () {
             this.on(
-              `${relationName}.${relationInfo.foreignKey}`,
-              `${table}.${relationInfo.primaryKey}`
+              `${relationName}.${relationInfo.primaryKey}`,
+              `${table}.${relationInfo.foreignKey}`
             )
 
             if (joinConditions) {
-              applyJoinConditions(this, relationInfo.table, joinConditions)
+              applyJoinConditions(this, relationName, joinConditions)
             }
           }
         )
+
+        // Apply post-join WHERE filtering if both 'on' and 'where' are specified
+        if (joinConditions && whereConditions) {
+          applyWhereClauses(query, relationName, { where: whereConditions })
+        }
         break
 
       case 'hasMany':
@@ -252,27 +277,37 @@ function processJoins(query, table, joins, relations) {
             }
           }
         )
+
+        // Apply post-join WHERE filtering if both 'on' and 'where' are specified
+        if (joinConditions && whereConditions) {
+          applyWhereClauses(query, relationName, { where: whereConditions })
+        }
         break
 
       case 'manyToMany': {
-        const firstJoin = query[joinType](
+        query[joinType](
           relationInfo.through.table,
-          `${table}.${relationInfo.primaryKey}`,
-          `${relationInfo.through.table}.${relationInfo.through.foreignKey} as ${relationName}`
+          `${table}.${relationInfo.primaryKey || 'id'}`,
+          `${relationInfo.through.table}.${relationInfo.through.foreignKey}`
         )
-        firstJoin[joinType](
+        query[joinType](
           `${relationInfo.table} as ${relationName}`,
           function () {
             this.on(
               `${relationInfo.through.table}.${relationInfo.through.otherKey}`,
-              `${table}.${relationInfo.primaryKey}`
+              `${relationName}.${relationInfo.primaryKey || 'id'}`
             )
 
             if (joinConditions) {
-              applyJoinConditions(this, relationInfo.table, joinConditions)
+              applyJoinConditions(this, relationName, joinConditions)
             }
           }
         )
+
+        // Apply post-join WHERE filtering if both 'on' and 'where' are specified
+        if (joinConditions && whereConditions) {
+          applyWhereClauses(query, relationName, { where: whereConditions })
+        }
         break
       }
     }
@@ -294,7 +329,7 @@ function applyJoinConditions(joinQuery, table, conditions) {
     return joinQuery
   }
 
-  const logicalOperators = ['OR', 'AND', 'NOT']
+  const logicalOperators = ['OR', 'AND']
   const hasLogicalOps = logicalOperators.some(op => conditions[op])
 
   // Process logical operators
@@ -317,46 +352,6 @@ function applyJoinConditions(joinQuery, table, conditions) {
       conditions.OR.forEach(condition => {
         joinQuery.orOn(builder => {
           applyJoinConditions(builder, table, condition)
-        })
-      })
-    }
-
-    if (conditions.NOT) {
-      // For NOT in joins, we need to create a nested condition group
-      // Since Knex doesn't have direct NOT support for joins, we'll simulate it
-      joinQuery.on(function () {
-        this.on(function () {
-          // Apply NOT conditions as regular conditions first to build the structure
-          // Then we'll manually negate by creating the opposite
-          const notConditions = conditions.NOT
-
-          // For simple NOT implementation, we'll apply each field condition negated
-          Object.entries(notConditions).forEach(([field, fieldConditions]) => {
-            if (fieldConditions === null) {
-              this.andOnNotNull(`${table}.${field}`)
-              return
-            }
-
-            if (typeof fieldConditions !== 'object') {
-              this.andOn(`${table}.${field}`, '!=', fieldConditions)
-              return
-            }
-
-            // For complex conditions, we need to apply negated operators
-            Object.entries(fieldConditions).forEach(([operator, value]) => {
-              switch (operator) {
-                case 'equals':
-                  this.andOn(`${table}.${field}`, '!=', value)
-                  break
-                case 'not':
-                  this.andOn(`${table}.${field}`, '=', value)
-                  break
-                default:
-                  // For other operators, apply them normally (this is a simplified approach)
-                  applyJoinOperator(this, `${table}.${field}`, operator, value)
-              }
-            })
-          })
         })
       })
     }
