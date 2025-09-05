@@ -1,7 +1,6 @@
 module.exports = {
   tableName: 'tag',
   alias: 't',
-  columns: ['id', 'name', 'created_at', 'updated_at'],
   projections: {
     details: function (_, alias) {
       return [

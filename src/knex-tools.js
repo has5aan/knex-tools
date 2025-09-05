@@ -93,7 +93,11 @@ function applyOperator(query, table, field, operator, value) {
       query = query.where(`${table}.${field}`, '=', value)
       break
     case 'not':
-      query = query.where(`${table}.${field}`, '!=', value)
+      if (value === null) {
+        query = query.whereNotNull(`${table}.${field}`)
+      } else {
+        query = query.where(`${table}.${field}`, '!=', value)
+      }
       break
     case 'gt':
       query = query.where(`${table}.${field}`, '>', value)
@@ -230,11 +234,6 @@ function applyExistsClause(query, table, existsConditions, relations) {
             )
           break
         }
-
-        default:
-          throw new Error(
-            `Unsupported relation type '${relation.type}' for _exists`
-          )
       }
 
       // Use applyWhereClauses for full operator support (logical operators, _condition flags, etc.)
@@ -329,11 +328,30 @@ function processJoins(query, rootModel, joins, relations) {
         ? relationName // Use relationName for self-referencing to avoid alias conflicts
         : relationModel.alias || relationName
 
-    // Select columns with aliases
-    const columns = relationModel.columns.map(
-      col => `${relationAlias}.${col} as ${relationName}_${col}`
-    )
-    query.select(columns)
+    // Select columns with aliases - projection is required
+    if (options.projection) {
+      // If projection is specified, it MUST exist
+      if (
+        !relationModel.projections ||
+        !relationModel.projections[options.projection]
+      ) {
+        throw new Error(
+          `Projection '${options.projection}' not found in model '${relationModel.tableName}'`
+        )
+      }
+      const columns = relationModel.projections[options.projection](
+        query,
+        relationAlias
+      ).map(col => {
+        // Handle already prefixed columns
+        if (col.includes('.')) {
+          const colName = col.split('.')[1]
+          return `${col} as ${relationName}_${colName}`
+        }
+        return `${relationAlias}.${col} as ${relationName}_${col}`
+      })
+      query.select(columns)
+    }
 
     switch (relationInfo.type) {
       case 'belongsTo':

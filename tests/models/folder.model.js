@@ -1,7 +1,6 @@
 module.exports = {
   tableName: 'folder',
   alias: 'f',
-  columns: ['id', 'user_id', 'parent_id', 'name', 'created_at', 'updated_at'],
   projections: {
     details: function (_, alias) {
       return [

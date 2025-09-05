@@ -498,7 +498,7 @@ subscription.on('delete', recordId => {
 
 ### 5. Security & Access Control
 
-#### 5.1 Row-Level Security
+#### 5.1 Exists Clause Security
 
 Implement fine-grained access control.
 
@@ -595,7 +595,7 @@ const result = await buildQuery(
 
 ### Phase 4: Enterprise Features
 
-10. **Row-level Security** - Enterprise security requirements
+10. **Exists Clause Security** - Advanced security requirements
 11. **DataLoader Integration** - Advanced optimization
 12. **Dynamic Field Resolution** - Maximum flexibility
 

@@ -1,14 +1,6 @@
 module.exports = {
   tableName: 'memo',
   alias: 'm',
-  columns: [
-    'id',
-    'user_id',
-    'folder_id',
-    'content',
-    'created_at',
-    'updated_at'
-  ],
   projections: {
     details: function (_, alias) {
       return [

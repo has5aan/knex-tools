@@ -1,6 +1,12 @@
 const { createInMemoryEmptyDatabase } = require('./setup')
 const knexTools = require('../src/knex-tools')
 
+// Global model imports
+const userModel = require('./models/user.model')
+const memoModel = require('./models/memo.model')
+const folderModel = require('./models/folder.model')
+const longMemoModel = require('./models/long-memo.model')
+
 describe('knexTools', () => {
   let db
 
@@ -33,6 +39,16 @@ describe('knexTools', () => {
           expected: {
             sql: 'select * from `folder` where `folder`.`user_id` != ?',
             bindings: [1]
+          }
+        },
+        {
+          name: 'not operator with null value',
+          parameters: {
+            criteria: { where: { deleted_at: { not: null } } }
+          },
+          expected: {
+            sql: 'select * from `folder` where `folder`.`deleted_at` is not null',
+            bindings: []
           }
         },
         {
@@ -288,10 +304,6 @@ describe('knexTools', () => {
     })
 
     describe('_exists operator for RLS', () => {
-      const userModel = require('./models/user.model')
-      const memoModel = require('./models/memo.model')
-      const folderModel = require('./models/folder.model')
-
       describe('belongsTo relationships', () => {
         const testCases = [
           {
@@ -454,7 +466,7 @@ describe('knexTools', () => {
                 }
               }
             },
-            expectError:
+            expectedError:
               'Relations must be provided to use _exists functionality'
           },
           {
@@ -468,17 +480,18 @@ describe('knexTools', () => {
               }
             },
             relations: memoModel.relations,
-            expectError: "Relation 'nonexistent' not found in relations config"
+            expectedError:
+              "Relation 'nonexistent' not found in relations config"
           }
         ]
 
         test.each(testCases)(
           '$name',
-          ({ setup, parameters, relations, expectError }) => {
+          ({ setup, parameters, relations, expectedError }) => {
             const query = setup()
             expect(() => {
               knexTools.applyWhereClauses(query, 'memo', parameters, relations)
-            }).toThrow(expectError)
+            }).toThrow(expectedError)
           }
         )
       })
@@ -526,9 +539,7 @@ describe('knexTools', () => {
       }
     ]
 
-    test.each(
-      testCases.filter(testCase => testCase.name === 'applies only skip')
-    )('$name', ({ parameters, expected }) => {
+    test.each(testCases)('$name', ({ parameters, expected }) => {
       const query = db('folder').select('*')
       knexTools.applyPagingClauses(query, parameters.criteria)
       expect(query.toSQL().sql).toMatch(expected.sql)
@@ -726,6 +737,16 @@ describe('knexTools', () => {
           }
         },
         {
+          name: 'not operator with null value in join condition',
+          parameters: {
+            joinConditions: { deleted_at: { not: null } }
+          },
+          expected: {
+            sql: 'left join `user` on `user`.`deleted_at` is not null',
+            bindings: []
+          }
+        },
+        {
           name: 'direct null assignment in join condition',
           parameters: {
             joinConditions: { middle_name: null }
@@ -877,10 +898,10 @@ describe('knexTools', () => {
       const testCases = [
         {
           name: 'belongsTo join without conditions',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
-              user: {}
+              user: { projection: 'details' }
             }
           },
           expected: {
@@ -891,7 +912,7 @@ describe('knexTools', () => {
       ]
 
       test.each(testCases)('$name', ({ model, parameters, expected }) => {
-        const modelDef = require(`./models/${model}.model`)
+        const modelDef = model
         const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
           '*'
         )
@@ -910,10 +931,10 @@ describe('knexTools', () => {
       const testCases = [
         {
           name: 'hasMany join without conditions',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
-              memos: {}
+              memos: { projection: 'details' }
             }
           },
           expected: {
@@ -924,7 +945,7 @@ describe('knexTools', () => {
       ]
 
       test.each(testCases)('$name', ({ model, parameters, expected }) => {
-        const modelDef = require(`./models/${model}.model`)
+        const modelDef = model
         const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
           '*'
         )
@@ -943,10 +964,10 @@ describe('knexTools', () => {
       const testCases = [
         {
           name: 'manyToMany join without conditions',
-          model: 'memo',
+          model: memoModel,
           parameters: {
             join: {
-              tags: {}
+              tags: { projection: 'details' }
             }
           },
           expected: {
@@ -957,7 +978,7 @@ describe('knexTools', () => {
       ]
 
       test.each(testCases)('$name', ({ model, parameters, expected }) => {
-        const modelDef = require(`./models/${model}.model`)
+        const modelDef = model
         const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
           '*'
         )
@@ -976,34 +997,34 @@ describe('knexTools', () => {
       const testCases = [
         {
           name: 'self-referencing hasMany join without conditions (children)',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
-              children: {}
+              children: { projection: 'details' }
             }
           },
           expected: {
-            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` as `f` left join `folder` as `children` on `children`.`parent_id` = `f`.`id`',
+            sql: 'select *, `children`.`id` as `children_id`, `children`.`name` as `children_name`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` as `f` left join `folder` as `children` on `children`.`parent_id` = `f`.`id`',
             bindings: []
           }
         },
         {
           name: 'self-referencing belongsTo join without conditions (parent)',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
-              parent: {}
+              parent: { projection: 'details' }
             }
           },
           expected: {
-            sql: 'select *, `parent`.`id` as `parent_id`, `parent`.`user_id` as `parent_user_id`, `parent`.`parent_id` as `parent_parent_id`, `parent`.`name` as `parent_name`, `parent`.`created_at` as `parent_created_at`, `parent`.`updated_at` as `parent_updated_at` from `folder` as `f` left join `folder` as `parent` on `parent`.`id` = `f`.`parent_id`',
+            sql: 'select *, `parent`.`id` as `parent_id`, `parent`.`name` as `parent_name`, `parent`.`user_id` as `parent_user_id`, `parent`.`parent_id` as `parent_parent_id`, `parent`.`created_at` as `parent_created_at`, `parent`.`updated_at` as `parent_updated_at` from `folder` as `f` left join `folder` as `parent` on `parent`.`id` = `f`.`parent_id`',
             bindings: []
           }
         }
       ]
 
       test.each(testCases)('$name', ({ model, parameters, expected }) => {
-        const modelDef = require(`./models/${model}.model`)
+        const modelDef = model
         const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
           '*'
         )
@@ -1022,10 +1043,11 @@ describe('knexTools', () => {
       const testCases = [
         {
           name: 'belongsTo join with both on and where conditions',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
               user: {
+                projection: 'details',
                 on: {
                   active: true
                 },
@@ -1042,10 +1064,11 @@ describe('knexTools', () => {
         },
         {
           name: 'hasMany join with complex on and where conditions',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
               children: {
+                projection: 'details',
                 on: {
                   user_id: { gt: 0 },
                   name: { contains: 'test' }
@@ -1058,16 +1081,17 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'select *, `children`.`id` as `children_id`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`name` as `children_name`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` as `f` left join `folder` as `children` on `children`.`parent_id` = `f`.`id` and `children`.`user_id` > ? and `children`.`name` like ? where `children`.`created_at` >= ? and `children`.`updated_at` is not null',
+            sql: 'select *, `children`.`id` as `children_id`, `children`.`name` as `children_name`, `children`.`user_id` as `children_user_id`, `children`.`parent_id` as `children_parent_id`, `children`.`created_at` as `children_created_at`, `children`.`updated_at` as `children_updated_at` from `folder` as `f` left join `folder` as `children` on `children`.`parent_id` = `f`.`id` and `children`.`user_id` > ? and `children`.`name` like ? where `children`.`created_at` >= ? and `children`.`updated_at` is not null',
             bindings: [0, '%test%', '2023-01-01']
           }
         },
         {
           name: 'manyToMany join with both on and where conditions',
-          model: 'memo',
+          model: memoModel,
           parameters: {
             join: {
               tags: {
+                projection: 'details',
                 on: {
                   name: { startsWith: 'tag_' }
                 },
@@ -1085,10 +1109,11 @@ describe('knexTools', () => {
         },
         {
           name: 'join with logical operators in both on and where',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
               user: {
+                projection: 'details',
                 on: {
                   OR: [{ active: true }, { verified: true }]
                 },
@@ -1105,10 +1130,11 @@ describe('knexTools', () => {
         },
         {
           name: 'enforce join type with both on and where conditions',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
               user: {
+                projection: 'details',
                 type: 'enforce',
                 on: {
                   active: true,
@@ -1128,10 +1154,11 @@ describe('knexTools', () => {
         },
         {
           name: 'join with conditional flags in both on and where',
-          model: 'folder',
+          model: folderModel,
           parameters: {
             join: {
               user: {
+                projection: 'details',
                 on: {
                   active: { equals: true, _condition: true },
                   role: { equals: 'admin', _condition: false }
@@ -1150,10 +1177,11 @@ describe('knexTools', () => {
         },
         {
           name: 'manyToMany enforce join with logical operators',
-          model: 'memo',
+          model: memoModel,
           parameters: {
             join: {
               tags: {
+                projection: 'details',
                 type: 'enforce',
                 on: {
                   OR: [{ name: 'urgent' }, { name: 'priority' }]
@@ -1175,7 +1203,7 @@ describe('knexTools', () => {
       ]
 
       test.each(testCases)('$name', ({ model, parameters, expected }) => {
-        const modelDef = require(`./models/${model}.model`)
+        const modelDef = model
         const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
           '*'
         )
@@ -1189,11 +1217,48 @@ describe('knexTools', () => {
         expect(query.toSQL().bindings).toEqual(expected.bindings)
       })
     })
+
+    describe('error handling', () => {
+      const testCases = [
+        {
+          name: 'throws error when relation not found in relations config',
+          model: memoModel,
+          parameters: {
+            join: {
+              nonexistent: { projection: 'details' }
+            }
+          },
+          expectedError: "Relation 'nonexistent' not found in relations config"
+        },
+        {
+          name: 'throws error when projection not found in model',
+          model: memoModel,
+          parameters: {
+            join: {
+              user: { projection: 'nonexistent' }
+            }
+          },
+          expectedError: "Projection 'nonexistent' not found in model 'user'"
+        }
+      ]
+
+      test.each(testCases)('$name', ({ model, parameters, expectedError }) => {
+        const modelDef = model
+        const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
+          '*'
+        )
+        expect(() => {
+          knexTools.processJoins(
+            query,
+            modelDef,
+            parameters.join,
+            modelDef.relations
+          )
+        }).toThrow(expectedError)
+      })
+    })
   })
   describe('buildQuery', () => {
-    const memoModel = require('./models/memo.model')
-    const userModel = require('./models/user.model')
-
     beforeEach(async () => {
       // Insert test data
       await db('user').insert([
@@ -1581,9 +1646,6 @@ describe('knexTools', () => {
     })
 
     describe('modifiers', () => {
-      const longMemoModel = require('./models/long-memo.model')
-      const memoModel = require('./models/memo.model')
-
       const testCases = [
         {
           name: 'applies default modifier automatically',

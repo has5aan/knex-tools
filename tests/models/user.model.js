@@ -1,17 +1,6 @@
 module.exports = {
   tableName: 'user',
   alias: 'u',
-  columns: [
-    'id',
-    'name',
-    'email',
-    'role',
-    'active',
-    'premium',
-    'verified',
-    'created_at',
-    'updated_at'
-  ],
   projections: {
     details: function (_, alias) {
       return [
