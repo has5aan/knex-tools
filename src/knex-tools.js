@@ -341,12 +341,9 @@ function processJoins(query, rootModel, joins, relations) {
       }
       const columns = relationModel.projections[options.projection](
         query,
-        relationAlias
-      ).map(col => {
-        // Extract the column name from fully qualified columns like 'u.id'
-        const colName = col.includes('.') ? col.split('.')[1] : col
-        return `${col} as ${relationName}_${colName}`
-      })
+        relationAlias,
+        relationName
+      )
       query.select(columns)
     }
 

@@ -2,18 +2,24 @@ module.exports = {
   tableName: 'folder',
   alias: 'f',
   projections: {
-    details: function (_, alias) {
+    details: function (_, alias, relationName = null) {
+      const prefix = relationName ? `${relationName}_` : ''
       return [
-        `${alias}.id`,
-        `${alias}.name`,
-        `${alias}.user_id`,
-        `${alias}.parent_id`,
-        `${alias}.created_at`,
-        `${alias}.updated_at`
+        `${alias}.id as ${prefix}id`,
+        `${alias}.name as ${prefix}name`,
+        `${alias}.user_id as ${prefix}user_id`,
+        `${alias}.parent_id as ${prefix}parent_id`,
+        `${alias}.created_at as ${prefix}created_at`,
+        `${alias}.updated_at as ${prefix}updated_at`
       ]
     },
-    short: function (_, alias) {
-      return [`${alias}.id`, `${alias}.name`, `${alias}.user_id`]
+    short: function (_, alias, relationName = null) {
+      const prefix = relationName ? `${relationName}_` : ''
+      return [
+        `${alias}.id as ${prefix}id`,
+        `${alias}.name as ${prefix}name`,
+        `${alias}.user_id as ${prefix}user_id`
+      ]
     }
   },
   relations: {

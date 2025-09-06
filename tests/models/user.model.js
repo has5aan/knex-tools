@@ -2,21 +2,27 @@ module.exports = {
   tableName: 'user',
   alias: 'u',
   projections: {
-    details: function (_, alias) {
+    details: function (_, alias, relationName = null) {
+      const prefix = relationName ? `${relationName}_` : ''
       return [
-        `${alias}.id`,
-        `${alias}.name`,
-        `${alias}.email`,
-        `${alias}.role`,
-        `${alias}.active`,
-        `${alias}.premium`,
-        `${alias}.verified`,
-        `${alias}.created_at`,
-        `${alias}.updated_at`
+        `${alias}.id as ${prefix}id`,
+        `${alias}.name as ${prefix}name`,
+        `${alias}.email as ${prefix}email`,
+        `${alias}.role as ${prefix}role`,
+        `${alias}.active as ${prefix}active`,
+        `${alias}.premium as ${prefix}premium`,
+        `${alias}.verified as ${prefix}verified`,
+        `${alias}.created_at as ${prefix}created_at`,
+        `${alias}.updated_at as ${prefix}updated_at`
       ]
     },
-    short: function (_, alias) {
-      return [`${alias}.id`, `${alias}.name`, `${alias}.email`]
+    short: function (_, alias, relationName = null) {
+      const prefix = relationName ? `${relationName}_` : ''
+      return [
+        `${alias}.id as ${prefix}id`,
+        `${alias}.name as ${prefix}name`,
+        `${alias}.email as ${prefix}email`
+      ]
     }
   },
   relations: {
