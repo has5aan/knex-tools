@@ -293,6 +293,72 @@ describe('knexTools', () => {
             sql: 'with `tags_hasall_values` as (select ? as value union select ? as value) select * from `folder` where exists (select 1 from `tags_hasall_values` where `tags_hasall_values`.value = `folder`.`tags` having COUNT(*) = ?)',
             bindings: ['urgent', 'priority', 2]
           }
+        },
+        {
+          name: 'AND logical operator with null values in where clauses',
+          parameters: {
+            criteria: {
+              where: {
+                AND: [
+                  { user_id: { equals: 1 } },
+                  null,
+                  { name: { equals: 'Test' } },
+                  undefined
+                ]
+              }
+            }
+          },
+          expected: {
+            sql: 'select * from `folder` where (`folder`.`user_id` = ?) and (`folder`.`name` = ?)',
+            bindings: [1, 'Test']
+          }
+        },
+        {
+          name: 'OR logical operator with null values in where clauses',
+          parameters: {
+            criteria: {
+              where: {
+                OR: [
+                  { user_id: { equals: 1 } },
+                  null,
+                  { name: { equals: 'Test' } },
+                  undefined
+                ]
+              }
+            }
+          },
+          expected: {
+            sql: 'select * from `folder` where (`folder`.`user_id` = ?) or (`folder`.`name` = ?)',
+            bindings: [1, 'Test']
+          }
+        },
+        {
+          name: 'AND logical operator with only null values should not affect query',
+          parameters: {
+            criteria: {
+              where: {
+                AND: [null, undefined, null]
+              }
+            }
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        },
+        {
+          name: 'OR logical operator with only null values should not affect query',
+          parameters: {
+            criteria: {
+              where: {
+                OR: [null, undefined, null]
+              }
+            }
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
         }
       ]
 
@@ -880,6 +946,70 @@ describe('knexTools', () => {
             sql: 'left join `user` on (`user`.`active` = ?) and (`user`.`role` = ?)',
             bindings: [true, 'admin']
           }
+        },
+        {
+          name: 'OR conditions with _condition flags',
+          parameters: {
+            joinConditions: {
+              OR: [
+                { active: true, _condition: true },
+                { verified: true, _condition: false },
+                { role: 'admin' }
+              ]
+            }
+          },
+          expected: {
+            sql: 'left join `user` on (`user`.`active` = ?) or (`user`.`role` = ?)',
+            bindings: [true, 'admin']
+          }
+        },
+        {
+          name: 'AND conditions with null values',
+          parameters: {
+            joinConditions: {
+              AND: [{ active: true }, null, { role: 'admin' }, undefined]
+            }
+          },
+          expected: {
+            sql: 'left join `user` on (`user`.`active` = ?) and (`user`.`role` = ?)',
+            bindings: [true, 'admin']
+          }
+        },
+        {
+          name: 'OR conditions with null values',
+          parameters: {
+            joinConditions: {
+              OR: [{ active: true }, null, { role: 'admin' }, undefined]
+            }
+          },
+          expected: {
+            sql: 'left join `user` on (`user`.`active` = ?) or (`user`.`role` = ?)',
+            bindings: [true, 'admin']
+          }
+        },
+        {
+          name: 'AND join conditions with only null values should not affect query',
+          parameters: {
+            joinConditions: {
+              AND: [null, undefined, null]
+            }
+          },
+          expected: {
+            sql: 'left join `user`',
+            bindings: []
+          }
+        },
+        {
+          name: 'OR join conditions with only null values should not affect query',
+          parameters: {
+            joinConditions: {
+              OR: [null, undefined, null]
+            }
+          },
+          expected: {
+            sql: 'left join `user`',
+            bindings: []
+          }
         }
       ]
 
@@ -1256,6 +1386,77 @@ describe('knexTools', () => {
             modelDef.relations
           )
         }).toThrow(expectedError)
+      })
+    })
+
+    describe('nested joins', () => {
+      const testCases = [
+        {
+          name: 'nested join: memo → folder → parent folder',
+          model: memoModel,
+          parameters: {
+            join: {
+              folder: {
+                projection: 'short',
+                join: {
+                  parent: { projection: 'short' }
+                }
+              }
+            }
+          },
+          expected: {
+            sql: 'select *, `f`.`id` as `folder_id`, `f`.`name` as `folder_name`, `f`.`user_id` as `folder_user_id`, `parent`.`id` as `parent_id`, `parent`.`name` as `parent_name`, `parent`.`user_id` as `parent_user_id` from `memo` as `m` left join `folder` as `f` on `f`.`id` = `m`.`folder_id` left join `folder` as `parent` on `parent`.`id` = `f`.`parent_id`',
+            bindings: []
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', ({ model, parameters, expected }) => {
+        const modelDef = model
+        const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
+          '*'
+        )
+        knexTools.processJoins(
+          query,
+          modelDef,
+          parameters.join,
+          modelDef.relations
+        )
+        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
+      })
+    })
+
+    describe('edge cases', () => {
+      const testCases = [
+        {
+          name: 'join with true (no conditions)',
+          model: folderModel,
+          parameters: {
+            join: {
+              user: true // Simple join, no conditions
+            }
+          },
+          expected: {
+            sql: 'select * from `folder` as `f` left join `user` as `u` on `u`.`id` = `f`.`user_id`',
+            bindings: []
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', ({ model, parameters, expected }) => {
+        const modelDef = model
+        const query = db(`${modelDef.tableName} as ${modelDef.alias}`).select(
+          '*'
+        )
+        knexTools.processJoins(
+          query,
+          modelDef,
+          parameters.join,
+          modelDef.relations
+        )
+        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
       })
     })
   })

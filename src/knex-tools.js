@@ -11,6 +11,10 @@ function applyWhereClauses(query, table, criteria, relations) {
   if (hasLogicalOps) {
     if (conditions.AND && Array.isArray(conditions.AND)) {
       conditions.AND.forEach(condition => {
+        if (condition == null) {
+          return
+        } // Skip null/undefined conditions
+
         // Only apply if no _condition property exists or if it's true
         if (
           condition._condition === undefined ||
@@ -25,9 +29,19 @@ function applyWhereClauses(query, table, criteria, relations) {
 
     if (conditions.OR && Array.isArray(conditions.OR)) {
       conditions.OR.forEach(condition => {
-        query.orWhere(builder => {
-          applyWhereClauses(builder, table, { where: condition }, relations)
-        })
+        if (condition == null) {
+          return
+        } // Skip null/undefined conditions
+
+        // Only apply if no _condition property exists or if it's true
+        if (
+          condition._condition === undefined ||
+          condition._condition === true
+        ) {
+          query.orWhere(builder => {
+            applyWhereClauses(builder, table, { where: condition }, relations)
+          })
+        }
       })
     }
   }
@@ -457,6 +471,10 @@ function applyJoinConditions(joinQuery, table, conditions) {
   if (hasLogicalOps) {
     if (conditions.AND && Array.isArray(conditions.AND)) {
       conditions.AND.forEach(condition => {
+        if (condition == null) {
+          return
+        } // Skip null/undefined conditions
+
         // Only apply if no _condition property exists or if it's true
         if (
           condition._condition === undefined ||
@@ -471,9 +489,19 @@ function applyJoinConditions(joinQuery, table, conditions) {
 
     if (conditions.OR && Array.isArray(conditions.OR)) {
       conditions.OR.forEach(condition => {
-        joinQuery.orOn(builder => {
-          applyJoinConditions(builder, table, condition)
-        })
+        if (condition == null) {
+          return
+        } // Skip null/undefined conditions
+
+        // Only apply if no _condition property exists or if it's true
+        if (
+          condition._condition === undefined ||
+          condition._condition === true
+        ) {
+          joinQuery.orOn(builder => {
+            applyJoinConditions(builder, table, condition)
+          })
+        }
       })
     }
   }
