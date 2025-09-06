@@ -641,31 +641,19 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
       if (!modifier) {
         throw new Error(`Modifier '${modifierName}' not found in model`)
       }
-      // Skip default modifier as it's already applied
-      if (modifierName === 'default') {
-        return
-      }
       // Apply modifier with destructured parameters
       modifier(query, knexInstance, modelObject.alias, params)
     })
   }
 
-  // Apply projection
-  if (queryConfig.projection) {
-    // Use predefined projection from model
-    const projection = modelObject.projections[queryConfig.projection]
-    if (!projection) {
-      throw new Error(
-        `Projection '${queryConfig.projection}' not found in model`
-      )
-    }
-    // All projections are functions that receive (knexInstance, alias)
-    const projectionColumns = projection(knexInstance, modelObject.alias)
-    query.select(projectionColumns)
-  } else {
-    // Default to all columns
-    query.select('*')
+  // Apply projection - projection is required
+  const projection = modelObject.projections[queryConfig.projection]
+  if (!projection) {
+    throw new Error(`Projection '${queryConfig.projection}' not found in model`)
   }
+  // All projections are functions that receive (knexInstance, alias)
+  const projectionColumns = projection(knexInstance, modelObject.alias)
+  query.select(projectionColumns)
 
   // Apply where clauses
   if (queryConfig.where) {
