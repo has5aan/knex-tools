@@ -343,12 +343,9 @@ function processJoins(query, rootModel, joins, relations) {
         query,
         relationAlias
       ).map(col => {
-        // Handle already prefixed columns
-        if (col.includes('.')) {
-          const colName = col.split('.')[1]
-          return `${col} as ${relationName}_${colName}`
-        }
-        return `${relationAlias}.${col} as ${relationName}_${col}`
+        // Extract the column name from fully qualified columns like 'u.id'
+        const colName = col.includes('.') ? col.split('.')[1] : col
+        return `${col} as ${relationName}_${colName}`
       })
       query.select(columns)
     }
@@ -630,21 +627,16 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
 
   // Apply projection
   if (queryConfig.projection) {
-    if (typeof queryConfig.projection === 'string') {
-      // Use predefined projection from model
-      const projection = modelObject.projections[queryConfig.projection]
-      if (!projection) {
-        throw new Error(
-          `Projection '${queryConfig.projection}' not found in model`
-        )
-      }
-      // All projections are functions that receive (knexInstance, alias)
-      const projectionColumns = projection(knexInstance, modelObject.alias)
-      query.select(projectionColumns)
-    } else if (Array.isArray(queryConfig.projection)) {
-      // Internal use only - for when populate functions modify projections to include foreign keys
-      query.select(queryConfig.projection)
+    // Use predefined projection from model
+    const projection = modelObject.projections[queryConfig.projection]
+    if (!projection) {
+      throw new Error(
+        `Projection '${queryConfig.projection}' not found in model`
+      )
     }
+    // All projections are functions that receive (knexInstance, alias)
+    const projectionColumns = projection(knexInstance, modelObject.alias)
+    query.select(projectionColumns)
   } else {
     // Default to all columns
     query.select('*')
@@ -799,26 +791,8 @@ async function populateHasManyRelation(
   }
 
   // Build query for related records
-  // Ensure foreign key is included in projection for proper grouping
-  let projection = relationQuery.projection
-  if (typeof projection === 'string' && relatedModel.projections[projection]) {
-    // All projections are functions that receive (db, alias)
-    let projectionColumns = relatedModel.projections[projection](
-      knexInstance,
-      relatedModel.alias
-    )
-    // Check if foreign key is included
-    if (
-      Array.isArray(projectionColumns) &&
-      !projectionColumns.includes(relation.foreignKey)
-    ) {
-      projection = [...projectionColumns, relation.foreignKey]
-    }
-  }
-
   const relatedRecords = await buildQuery(knexInstance, relatedModel, {
     ...relationQuery,
-    projection,
     where: {
       ...relationQuery.where,
       [relation.foreignKey]: { in: primaryKeys }

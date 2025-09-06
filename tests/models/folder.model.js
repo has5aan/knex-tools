@@ -13,7 +13,7 @@ module.exports = {
       ]
     },
     short: function (_, alias) {
-      return [`${alias}.id`, `${alias}.name`]
+      return [`${alias}.id`, `${alias}.name`, `${alias}.user_id`]
     }
   },
   relations: {

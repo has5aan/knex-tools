@@ -263,7 +263,7 @@ describe('knexTools', () => {
           },
           expected: {
             sql: 'select * from `folder` where (`folder`.`user_id` > ? and `folder`.`user_id` != ?) or (`folder`.`name` = ?) or (`folder`.`user_id` != ?)',
-            bindings: [0, 2, 'Test Folder']
+            bindings: [0, 2, 'Test Folder', 1]
           }
         },
         {
@@ -300,6 +300,7 @@ describe('knexTools', () => {
         const query = db('folder').select('*')
         knexTools.applyWhereClauses(query, 'folder', parameters.criteria)
         expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
       })
     })
 
@@ -1632,6 +1633,17 @@ describe('knexTools', () => {
             }
           },
           expectedError: "Relation 'nonexistent' not found in model"
+        },
+        {
+          name: 'error handling for invalid modifier',
+          model: memoModel,
+          queryConfig: {
+            projection: 'details',
+            modifiers: {
+              nonexistent: {}
+            }
+          },
+          expectedError: "Modifier 'nonexistent' not found in model"
         }
       ]
 
