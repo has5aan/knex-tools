@@ -43,6 +43,7 @@ module.exports = {
       table: 'tag',
       through: {
         table: 'memo_tag',
+        alias: 'mt',
         foreignKey: 'memo_id',
         otherKey: 'tag_id'
       },

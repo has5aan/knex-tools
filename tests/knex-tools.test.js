@@ -1102,7 +1102,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'select *, `t`.`id` as `tags_id`, `t`.`name` as `tags_name`, `t`.`created_at` as `tags_created_at`, `t`.`updated_at` as `tags_updated_at` from `memo` as `m` left join `memo_tag` on `m`.`id` = `memo_tag`.`memo_id` left join `tag` as `t` on `memo_tag`.`tag_id` = `t`.`id`',
+            sql: 'select *, `t`.`id` as `tags_id`, `t`.`name` as `tags_name`, `t`.`created_at` as `tags_created_at`, `t`.`updated_at` as `tags_updated_at` from `memo` as `m` left join `memo_tag` as `mt` on `m`.`id` = `mt`.`memo_id` left join `tag` as `t` on `mt`.`tag_id` = `t`.`id`',
             bindings: []
           }
         }
@@ -1234,7 +1234,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'select *, `t`.`id` as `tags_id`, `t`.`name` as `tags_name`, `t`.`created_at` as `tags_created_at`, `t`.`updated_at` as `tags_updated_at` from `memo` as `m` left join `memo_tag` on `m`.`id` = `memo_tag`.`memo_id` left join `tag` as `t` on `memo_tag`.`tag_id` = `t`.`id` and `t`.`name` like ? where `t`.`created_at` is not null and `t`.`updated_at` >= ?',
+            sql: 'select *, `t`.`id` as `tags_id`, `t`.`name` as `tags_name`, `t`.`created_at` as `tags_created_at`, `t`.`updated_at` as `tags_updated_at` from `memo` as `m` left join `memo_tag` as `mt` on `m`.`id` = `mt`.`memo_id` left join `tag` as `t` on `mt`.`tag_id` = `t`.`id` and `t`.`name` like ? where `t`.`created_at` is not null and `t`.`updated_at` >= ?',
             bindings: ['tag_%', '2023-06-01']
           }
         },
@@ -1327,7 +1327,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'select *, `t`.`id` as `tags_id`, `t`.`name` as `tags_name`, `t`.`created_at` as `tags_created_at`, `t`.`updated_at` as `tags_updated_at` from `memo` as `m` inner join `memo_tag` on `m`.`id` = `memo_tag`.`memo_id` inner join `tag` as `t` on `memo_tag`.`tag_id` = `t`.`id` or (`t`.`name` = ?) or (`t`.`name` = ?) where (`t`.`created_at` >= ?) and (`t`.`updated_at` is not null)',
+            sql: 'select *, `t`.`id` as `tags_id`, `t`.`name` as `tags_name`, `t`.`created_at` as `tags_created_at`, `t`.`updated_at` as `tags_updated_at` from `memo` as `m` inner join `memo_tag` as `mt` on `m`.`id` = `mt`.`memo_id` inner join `tag` as `t` on `mt`.`tag_id` = `t`.`id` or (`t`.`name` = ?) or (`t`.`name` = ?) where (`t`.`created_at` >= ?) and (`t`.`updated_at` is not null)',
             bindings: ['urgent', 'priority', '2023-01-01']
           }
         }

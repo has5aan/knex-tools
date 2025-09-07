@@ -415,16 +415,17 @@ function processJoins(query, rootModel, joins, relations) {
         break
 
       case 'manyToMany': {
+        const junctionAlias = relationInfo.through.alias
         query[joinType](
-          relationInfo.through.table,
+          `${relationInfo.through.table} as ${junctionAlias}`,
           `${rootModel.alias}.${relationInfo.primaryKey || 'id'}`,
-          `${relationInfo.through.table}.${relationInfo.through.foreignKey}`
+          `${junctionAlias}.${relationInfo.through.foreignKey}`
         )
         query[joinType](
           `${relationInfo.table} as ${relationAlias}`,
           function () {
             this.on(
-              `${relationInfo.through.table}.${relationInfo.through.otherKey}`,
+              `${junctionAlias}.${relationInfo.through.otherKey}`,
               `${relationAlias}.${relationInfo.primaryKey || 'id'}`
             )
 
