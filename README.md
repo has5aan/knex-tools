@@ -1,339 +1,288 @@
 # knex-tools
 
-A powerful utility library that extends Knex.js with advanced query building capabilities, sophisticated filtering, pagination, sorting, and transaction management.
+**Query builder extension for Node.js** - Extends Knex.js with filtering, GraphQL-style data fetching, exists clause filtering, and JOIN capabilities.
 
-## Features
+[![npm version](https://badge.fury.io/js/knex-tools.svg)](https://www.npmjs.com/package/knex-tools)
+[![Node.js Version](https://img.shields.io/node/v/knex-tools.svg)](https://nodejs.org)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-- 🔍 **Advanced Filtering**: Sophisticated where clauses with logical operators (AND, OR, NOT)
-- 🎯 **Rich Operators**: Support for equals, not, gt, gte, lt, lte, contains, startsWith, endsWith, in, notIn, isNull, isNotNull
-- 📄 **Pagination**: Built-in skip/take pagination support
-- 🔄 **Sorting**: Flexible multi-field sorting with default options
-- 🔒 **Transactions**: Simplified transaction management with automatic rollback
-- 🎛️ **Conditional Filtering**: Dynamic query building with `_condition` flags
-- 🗄️ **Database Agnostic**: Works with all Knex.js supported databases
-
-## Installation
+## 🚀 Quick Start
 
 ```bash
 npm install knex-tools
-# or
-yarn add knex-tools
 ```
-
-## Requirements
-
-- Node.js >= 14
-- Knex.js >= 3.0.0
-
-## Quick Start
 
 ```javascript
 const knex = require('knex')(config)
-const {
-  applyWhereClauses,
-  applyPagingClauses,
-  applySortingClauses,
-  buildMakeTransaction
-} = require('knex-tools')
+const { buildQuery } = require('knex-tools')
 
-// Basic usage
-const query = knex('users').select('*')
-applyWhereClauses(query, 'users', {
+// GraphQL-style nested data fetching
+const users = await buildQuery(knex, userModel, {
+  projection: 'details',
   where: {
-    age: { gte: 18 },
-    name: { contains: 'John' }
+    role: 'admin',
+    active: true,
+    lastLogin: { gte: '2024-01-01' }
+  },
+  each: {
+    posts: {
+      projection: 'summary',
+      where: { published: true }
+    }
+  },
+  orderBy: [{ field: 'created_at', direction: 'desc' }],
+  take: 10
+})
+```
+
+## 🔥 Why knex-tools?
+
+### **🎯 Filtering**
+
+```javascript
+// Rich operator system
+where: {
+  age: { gte: 21, lte: 65 },           // Range queries
+  name: { contains: 'John' },          // Text search
+  email: { endsWith: '@company.com' }, // Pattern matching
+  role: { in: ['admin', 'manager'] },  // List queries
+  tags: { hasAll: ['urgent', 'important'] }, // Array contains all
+  deletedAt: { isNull: true },         // Null checks
+  _condition: user.canViewAll          // Dynamic conditions
+}
+```
+
+### **🔒 Exists Clause Filtering**
+
+```javascript
+// Security with _exists operator
+where: {
+  _exists: {
+    // Only show posts user can access
+    user: {
+      id: currentUser.id,
+      role: { in: ['admin', 'owner'] }
+    }
+  }
+}
+```
+
+### **📊 GraphQL-Style Data Fetching**
+
+```javascript
+// Efficient nested loading (no N+1 queries)
+const posts = await buildQuery(knex, postModel, {
+  each: {
+    author: { projection: 'profile' },
+    comments: {
+      projection: 'details',
+      orderBy: [{ field: 'created_at', direction: 'desc' }],
+      take: 5
+    },
+    tags: { projection: 'name' }
   }
 })
 ```
 
-## API Reference
-
-### applyWhereClauses(query, table, criteria, relations)
-
-Applies advanced filtering conditions to a Knex query with intuitive object-based syntax.
-
-**Parameters:**
-
-- `query` (Object): Knex query builder instance
-- `table` (String): Table name for prefixing columns
-- `criteria` (Object): Filter criteria containing `where` conditions
-- `relations` (Object): Optional relations configuration
-
-**Example:**
+### **🏗️ Horizontal Table Partitioning**
 
 ```javascript
-const criteria = {
-  where: {
-    // Simple equality
-    status: 'active',
-
-    // Null checks
-    deleted_at: null,
-
-    // Comparison operators
-    age: { gte: 18, lt: 65 },
-
-    // String operations
-    name: { contains: 'John' },
-    email: { endsWith: '@company.com' },
-
-    // Array operations
-    role: { in: ['admin', 'editor'] },
-    department: { notIn: ['temp', 'intern'] },
-
-    // Logical operators
-    AND: [{ age: { gte: 18 } }, { status: 'active' }],
-    OR: [{ role: 'admin' }, { department: 'management' }],
-    NOT: {
-      status: 'banned'
+// Create logical views with default modifiers
+const activeUserModel = {
+  ...userModel,
+  modifiers: {
+    default: (query, knex, alias) => {
+      query.where(`${alias}.active`, true).where(`${alias}.deleted_at`, null)
     }
   }
 }
 
-applyWhereClauses(query, 'users', criteria)
+// Automatically filtered - no parameters needed
+const activeUsers = await buildQuery(knex, activeUserModel, {
+  projection: 'details'
+})
 ```
 
-#### Supported Operators
+## 📖 Core Concepts
 
-| Operator     | Description                        | Example                               |
-| ------------ | ---------------------------------- | ------------------------------------- |
-| `equals`     | Exact match                        | `{ id: { equals: 1 } }`               |
-| `not`        | Not equal                          | `{ status: { not: 'inactive' } }`     |
-| `gt`         | Greater than                       | `{ age: { gt: 18 } }`                 |
-| `gte`        | Greater than or equal              | `{ age: { gte: 21 } }`                |
-| `lt`         | Less than                          | `{ score: { lt: 100 } }`              |
-| `lte`        | Less than or equal                 | `{ score: { lte: 95 } }`              |
-| `contains`   | String contains (case-insensitive) | `{ name: { contains: 'john' } }`      |
-| `startsWith` | String starts with                 | `{ email: { startsWith: 'admin' } }`  |
-| `endsWith`   | String ends with                   | `{ email: { endsWith: '.com' } }`     |
-| `in`         | Value in array                     | `{ role: { in: ['admin', 'user'] } }` |
-| `notIn`      | Value not in array                 | `{ status: { notIn: ['banned'] } }`   |
-| `isNull`     | Is null                            | `{ deleted_at: { isNull: true } }`    |
-| `isNotNull`  | Is not null                        | `{ email: { isNotNull: true } }`      |
-
-#### Conditional Filtering
-
-Use the `_condition` flag to dynamically include/exclude filters:
+### **Models Define Structure**
 
 ```javascript
-const includeAgeFilter = user.hasPermission('view_age')
+const userModel = {
+  tableName: 'users',
+  alias: 'u',
 
-const criteria = {
-  where: {
-    name: { contains: 'John' },
-    age: {
-      gte: 18,
-      _condition: includeAgeFilter // Only applied if true
+  // Function-based projections with alias support (REQUIRED for buildQuery)
+  projections: {
+    details: (knexInstance, alias, relationName = null) => [
+      `${alias}.id`,
+      `${alias}.name`,
+      `${alias}.email`,
+      `${alias}.role`
+    ],
+    summary: (knexInstance, alias, relationName = null) => [
+      `${alias}.id`,
+      `${alias}.name`
+    ]
+  },
+
+  // Relations for data fetching and security
+  relations: {
+    posts: {
+      type: 'hasMany',
+      model: 'post',
+      foreignKey: 'user_id',
+      modelDefinition: () => require('./post.model')
+    },
+    tags: {
+      type: 'manyToMany',
+      model: 'tag',
+      through: {
+        table: 'user_tags',
+        alias: 'ut', // Junction table alias (required)
+        foreignKey: 'user_id',
+        otherKey: 'tag_id'
+      },
+      modelDefinition: () => require('./tag.model')
+    }
+  },
+
+  // Modifiers for reusable query logic
+  modifiers: {
+    forRole: (query, knex, alias, { role }) => {
+      query.where(`${alias}.role`, role)
+    },
+    withMinPosts: (query, knex, alias, { minCount }) => {
+      query
+        .join('posts', `${alias}.id`, 'posts.user_id')
+        .groupBy(`${alias}.id`)
+        .having(knex.raw('COUNT(posts.id)'), '>=', minCount)
     }
   }
 }
 ```
 
-### applyPagingClauses(query, criteria)
-
-Adds pagination to a Knex query using `skip` and `take` parameters.
-
-**Parameters:**
-
-- `query` (Object): Knex query builder instance
-- `criteria` (Object): Pagination criteria
-
-**Example:**
+### **Using Named Modifiers**
 
 ```javascript
-const criteria = {
-  skip: 20, // Offset
-  take: 10 // Limit
-}
+// Apply named modifiers with parameters
+const adminUsers = await buildQuery(knex, userModel, {
+  projection: 'details',
+  modifiers: {
+    forRole: { role: 'admin' }
+  }
+})
 
-applyPagingClauses(query, criteria)
-// Generates: LIMIT 10 OFFSET 20
+// Combine multiple modifiers
+const prolificAdmins = await buildQuery(knex, userModel, {
+  projection: 'details',
+  modifiers: {
+    forRole: { role: 'admin' },
+    withMinPosts: { minCount: 10 }
+  }
+})
 ```
 
-### applySortingClauses(query, table, criteria, defaultSortOptions)
-
-Applies sorting to a Knex query with support for multiple fields and default sorting.
-
-**Parameters:**
-
-- `query` (Object): Knex query builder instance
-- `table` (String): Table name for prefixing columns
-- `criteria` (Object): Sort criteria with field-direction pairs
-- `defaultSortOptions` (Object): Default sort configuration
-
-**Example:**
+### **Query Building**
 
 ```javascript
+const { applyWhereClauses, applySortingClauses } = require('knex-tools')
+
+const query = knex('users as u').select('*')
+
+// Rich filtering
+applyWhereClauses(
+  query,
+  'u',
+  {
+    where: {
+      age: { gte: 18 },
+      OR: [{ name: { startsWith: 'John' } }, { email: { contains: '@admin' } }]
+    }
+  },
+  userModel.relations
+)
+
 // Multi-field sorting
-const sortCriteria = {
-  created_at: 'desc',
-  name: 'asc'
-}
-
-// Default sorting when no criteria provided
-const defaultSort = {
-  field: 'created_at',
-  direction: 'desc'
-}
-
-applySortingClauses(query, 'users', sortCriteria, defaultSort)
+applySortingClauses(query, 'u', [
+  { field: 'role', direction: 'asc' },
+  { field: 'created_at', direction: 'desc' }
+])
 ```
 
-### buildMakeTransaction(knexInstance)
+## 🔧 API
 
-Creates a transaction factory function with automatic error handling and rollback.
+| Function               | Purpose                     | Use Case                  |
+| ---------------------- | --------------------------- | ------------------------- |
+| `buildQuery`           | GraphQL-style data fetching | Nested queries            |
+| `applyWhereClauses`    | Filtering                   | Rich search functionality |
+| `applySortingClauses`  | Multi-field sorting         | Ordered results           |
+| `applyPagingClauses`   | Pagination                  | Large dataset handling    |
+| `processJoins`         | JOINs                       | Report generation         |
+| `buildMakeTransaction` | Transaction management      | Data consistency          |
 
-**Parameters:**
+## 📚 Documentation
 
-- `knexInstance` (Object): Knex instance
+- 📖 **[API Reference](docs/API_REFERENCE.md)** - Function documentation
+- 🏗️ **[Models Guide](docs/MODELS_GUIDE.md)** - Model definitions and patterns
+- 💡 **[Examples](docs/EXAMPLES.md)** - Real-world use cases
+- 🚀 **[Features](docs/ADVANCED_FEATURES.md)** - Extended functionality
+- 🔄 **[Migration Guide](docs/MIGRATION_GUIDE.md)** - From other ORMs
 
-**Returns:**
+## 🏢 Features
 
-- `Function`: Transaction factory function
-
-**Example:**
+### **Multi-tenant Architecture**
 
 ```javascript
-const makeTransaction = buildMakeTransaction(knex)
-
-// Use in async functions
-const result = await makeTransaction(async trx => {
-  const user = await trx('users').insert({ name: 'John' }).returning('*')
-  await trx('profiles').insert({ user_id: user[0].id, bio: 'Developer' })
-
-  // If any operation fails, transaction is automatically rolled back
-  return user[0]
-})
+// Tenant isolation with exists clause
+where: {
+  _exists: {
+    tenant: {
+      id: user.tenantId,
+      active: true
+    }
+  }
+}
 ```
 
-## Complete Example
+### **Reporting**
 
 ```javascript
-const knex = require('knex')({
-  client: 'postgresql',
-  connection: process.env.DATABASE_URL
-})
-
-const {
-  applyWhereClauses,
-  applyPagingClauses,
-  applySortingClauses,
-  buildMakeTransaction
-} = require('knex-tools')
-
-async function getUsersWithFilters(filters) {
-  const query = knex('users')
-    .select('users.*')
-    .leftJoin('profiles', 'users.id', 'profiles.user_id')
-
-  // Apply complex filtering
-  if (filters.where) {
-    applyWhereClauses(query, 'users', { where: filters.where })
-  }
-
-  // Apply pagination
-  if (filters.skip || filters.take) {
-    applyPagingClauses(query, {
-      skip: filters.skip || 0,
-      take: filters.take || 50
-    })
-  }
-
-  // Apply sorting with default
-  applySortingClauses(query, 'users', filters.orderBy, {
-    field: 'created_at',
-    direction: 'desc'
-  })
-
-  return await query
-}
-
-// Usage examples
-const activeAdults = await getUsersWithFilters({
-  where: {
-    AND: [{ age: { gte: 18 } }, { status: 'active' }],
-    email: { isNotNull: true }
+// JOIN scenarios with proper aliasing
+const report = await processJoins(
+  query,
+  userModel,
+  {
+    posts: {
+      on: { published: true },
+      where: { created_at: { gte: startDate } }
+    },
+    tags: {
+      joinType: 'leftJoin',
+      on: { active: true }
+    }
   },
-  orderBy: {
-    last_login: 'desc',
-    name: 'asc'
-  },
-  skip: 0,
-  take: 20
-})
-
-// Transaction example
-const makeTransaction = buildMakeTransaction(knex)
-
-const newUser = await makeTransaction(async trx => {
-  const [user] = await trx('users')
-    .insert({
-      name: 'Jane Doe',
-      email: 'jane@example.com'
-    })
-    .returning('*')
-
-  await trx('user_settings').insert({
-    user_id: user.id,
-    theme: 'dark'
-  })
-
-  return user
-})
+  relations
+)
+// Generated SQL: LEFT JOIN user_tags as ut ON u.id = ut.user_id
+//                LEFT JOIN tags as t ON ut.tag_id = t.id
 ```
 
-## Database Compatibility
+### **Performance Optimization**
 
-knex-tools works with all databases supported by Knex.js:
+- **Smart batching** - Eliminates N+1 queries
+- **Efficient projections** - Only fetch needed columns
+- **Optimized JOINs** - Minimal database round trips
+- **Alias management** - Prevents SQL conflicts
 
-- PostgreSQL (recommended for `contains`, `startsWith`, `endsWith` with case-insensitive search)
-- MySQL/MariaDB
-- SQLite3
-- Oracle Database
-- Amazon Redshift
-- Microsoft SQL Server
+## 🤝 Contributing
 
-**Note:** String operations (`contains`, `startsWith`, `endsWith`) use `ILIKE` on PostgreSQL for case-insensitive matching, and `LIKE` on other databases.
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
-## Contributing
+## 📄 License
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and add tests
-4. Run tests: `npm test`
-5. Run linting: `npm run lint`
-6. Submit a pull request
-
-## Testing
-
-```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run linting
-npm run lint
-
-# Format code
-npm run format
-```
-
-## License
-
-MIT © [has5aan](https://github.com/has5aan)
-
-## Changelog
-
-### v1.0.0
-
-- Initial release
-- Advanced where clause building with intuitive object-based syntax
-- Pagination and sorting utilities
-- Transaction management
-- Comprehensive test coverage
+Apache 2.0 © [Hassaan](mailto:has5aan@outlook.com)
 
 ---
 
-For more examples and advanced usage patterns, check out the [examples](./examples/) directory.
+**Built for applications that need flexible data access patterns.**
