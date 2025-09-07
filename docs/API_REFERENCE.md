@@ -1,6 +1,6 @@
 # API Reference
 
-Complete documentation for all knex-tools functions and their parameters.
+Documentation for all knex-tools functions and their parameters.
 
 ## Table of Contents
 
@@ -20,7 +20,7 @@ Complete documentation for all knex-tools functions and their parameters.
 
 ### buildQuery
 
-**GraphQL-style data fetching with nested relations and advanced filtering.**
+**GraphQL-style data fetching with nested relations and filtering.**
 
 ```javascript
 buildQuery(knexInstance, modelObject, queryConfig)
@@ -94,7 +94,7 @@ const adminUsers = await buildQuery(knex, userModel, {
 
 ### applyWhereClauses
 
-**Advanced filtering with rich operators and logical conditions.**
+**Filtering with rich operators and logical conditions.**
 
 ```javascript
 applyWhereClauses(query, table, criteria, relations)
@@ -269,7 +269,7 @@ applyPagingClauses(query, {
 
 ### processJoins
 
-**Complex JOIN operations with conditions and logical operators.**
+**JOIN operations with conditions and logical operators.**
 
 ```javascript
 processJoins(query, rootModel, joins, relations)
@@ -312,7 +312,7 @@ processJoins(
 )
 ```
 
-**Complex JOIN Conditions**
+**JOIN Conditions**
 
 ```javascript
 processJoins(
@@ -328,16 +328,18 @@ processJoins(
         created_at: { gte: '2024-01-01' }
       }
     },
-    comments: {
+    tags: {
       joinType: 'leftJoin',
       on: {
-        approved: true,
-        OR: [{ flagged: { isNull: true } }, { flagged: false }]
+        active: true
       }
     }
   },
   postModel.relations
 )
+// Generated SQL for manyToMany:
+// LEFT JOIN post_tags as pt ON p.id = pt.post_id
+// LEFT JOIN tags as t ON pt.tag_id = t.id AND t.active = true
 ```
 
 ---
@@ -455,7 +457,7 @@ try {
 
 ## Model Structure
 
-### Complete Model Definition
+### Model Definition
 
 ```javascript
 const userModel = {
@@ -465,15 +467,18 @@ const userModel = {
 
   // Projections - functions that return column arrays (REQUIRED for buildQuery)
   projections: {
-    details: (knexInstance, alias) => [
+    details: (knexInstance, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       `${alias}.email`,
       `${alias}.role`,
       `${alias}.created_at`
     ],
-    summary: (knexInstance, alias) => [`${alias}.id`, `${alias}.name`],
-    withStats: (knexInstance, alias) => [
+    summary: (knexInstance, alias, relationName = null) => [
+      `${alias}.id`,
+      `${alias}.name`
+    ],
+    withStats: (knexInstance, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       knexInstance.raw(`COUNT(posts.id) as post_count`)
@@ -504,6 +509,7 @@ const userModel = {
       table: 'tags',
       through: {
         table: 'user_tags',
+        alias: 'ut', // Junction table alias (required)
         foreignKey: 'user_id',
         otherKey: 'tag_id'
       },
@@ -574,12 +580,20 @@ tags: {
   table: 'tags',
   through: {
     table: 'user_tags',      // Junction table
+    alias: 'ut',             // Junction table alias (required)
     foreignKey: 'user_id',   // This table's key in junction
     otherKey: 'tag_id'       // Other table's key in junction
   },
   primaryKey: 'id',          // Optional, defaults to 'id'
   modelDefinition: () => require('./tag.model')
 }
+```
+
+**Generated SQL:**
+
+```sql
+LEFT JOIN user_tags as ut ON u.id = ut.user_id
+LEFT JOIN tags as t ON ut.tag_id = t.id
 ```
 
 ### Self-Referencing Relations

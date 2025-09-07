@@ -25,13 +25,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Architecture
 
-This is a Knex.js utility library that provides query building enhancements. The main export is from `src/knex-tools.js` with four core functions:
+This is a Knex.js utility library that provides query building enhancements. The main export is from `src/knex-tools.js` with six core functions:
 
 ### Core Functions
 
-- `applyWhereClauses(query, table, criteria, relations)` - Advanced filtering with logical operators (AND, OR, NOT) and rich comparison operators (equals, not, gt, gte, lt, lte, contains, startsWith, endsWith, in, notIn, isNull, isNotNull)
+- `buildQuery(knexInstance, modelObject, queryConfig)` - GraphQL-style data fetching with nested relations and filtering
+- `applyWhereClauses(query, table, criteria, relations)` - Filtering with logical operators (AND, OR, NOT) and rich comparison operators (equals, not, gt, gte, lt, lte, contains, startsWith, endsWith, in, notIn, isNull, isNotNull, hasAll)
 - `applyPagingClauses(query, criteria)` - Pagination using skip/take parameters
 - `applySortingClauses(query, table, criteria, defaultSortOptions)` - Multi-field sorting with defaults
+- `processJoins(query, rootModel, joins, relations)` - JOIN operations with conditions and logical operators
 - `buildMakeTransaction(knexInstance)` - Transaction factory with automatic rollback
 
 ### Key Design Patterns

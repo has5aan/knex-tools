@@ -1,6 +1,6 @@
 # knex-tools
 
-**Advanced query builder for Node.js** - Extends Knex.js with powerful filtering, GraphQL-style data fetching, exists clause filtering, and sophisticated JOIN capabilities.
+**Query builder extension for Node.js** - Extends Knex.js with filtering, GraphQL-style data fetching, exists clause filtering, and JOIN capabilities.
 
 [![npm version](https://badge.fury.io/js/knex-tools.svg)](https://www.npmjs.com/package/knex-tools)
 [![Node.js Version](https://img.shields.io/node/v/knex-tools.svg)](https://nodejs.org)
@@ -37,7 +37,7 @@ const users = await buildQuery(knex, userModel, {
 
 ## 🔥 Why knex-tools?
 
-### **🎯 Advanced Filtering**
+### **🎯 Filtering**
 
 ```javascript
 // Rich operator system
@@ -46,6 +46,7 @@ where: {
   name: { contains: 'John' },          // Text search
   email: { endsWith: '@company.com' }, // Pattern matching
   role: { in: ['admin', 'manager'] },  // List queries
+  tags: { hasAll: ['urgent', 'important'] }, // Array contains all
   deletedAt: { isNull: true },         // Null checks
   _condition: user.canViewAll          // Dynamic conditions
 }
@@ -54,7 +55,7 @@ where: {
 ### **🔒 Exists Clause Filtering**
 
 ```javascript
-// Advanced security with _exists operator
+// Security with _exists operator
 where: {
   _exists: {
     // Only show posts user can access
@@ -113,13 +114,16 @@ const userModel = {
 
   // Function-based projections with alias support (REQUIRED for buildQuery)
   projections: {
-    details: (knexInstance, alias) => [
+    details: (knexInstance, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       `${alias}.email`,
       `${alias}.role`
     ],
-    summary: (knexInstance, alias) => [`${alias}.id`, `${alias}.name`]
+    summary: (knexInstance, alias, relationName = null) => [
+      `${alias}.id`,
+      `${alias}.name`
+    ]
   },
 
   // Relations for data fetching and security
@@ -129,6 +133,17 @@ const userModel = {
       model: 'post',
       foreignKey: 'user_id',
       modelDefinition: () => require('./post.model')
+    },
+    tags: {
+      type: 'manyToMany',
+      model: 'tag',
+      through: {
+        table: 'user_tags',
+        alias: 'ut', // Junction table alias (required)
+        foreignKey: 'user_id',
+        otherKey: 'tag_id'
+      },
+      modelDefinition: () => require('./tag.model')
     }
   },
 
@@ -168,14 +183,14 @@ const prolificAdmins = await buildQuery(knex, userModel, {
 })
 ```
 
-### **Powerful Query Building**
+### **Query Building**
 
 ```javascript
 const { applyWhereClauses, applySortingClauses } = require('knex-tools')
 
 const query = knex('users as u').select('*')
 
-// Advanced filtering
+// Rich filtering
 applyWhereClauses(
   query,
   'u',
@@ -195,26 +210,26 @@ applySortingClauses(query, 'u', [
 ])
 ```
 
-## 🔧 Complete API
+## 🔧 API
 
 | Function               | Purpose                     | Use Case                  |
 | ---------------------- | --------------------------- | ------------------------- |
-| `buildQuery`           | GraphQL-style data fetching | Complex nested queries    |
-| `applyWhereClauses`    | Advanced filtering          | Rich search functionality |
+| `buildQuery`           | GraphQL-style data fetching | Nested queries            |
+| `applyWhereClauses`    | Filtering                   | Rich search functionality |
 | `applySortingClauses`  | Multi-field sorting         | Ordered results           |
 | `applyPagingClauses`   | Pagination                  | Large dataset handling    |
-| `processJoins`         | Complex JOINs               | Report generation         |
+| `processJoins`         | JOINs                       | Report generation         |
 | `buildMakeTransaction` | Transaction management      | Data consistency          |
 
 ## 📚 Documentation
 
-- 📖 **[API Reference](docs/API_REFERENCE.md)** - Complete function documentation
+- 📖 **[API Reference](docs/API_REFERENCE.md)** - Function documentation
 - 🏗️ **[Models Guide](docs/MODELS_GUIDE.md)** - Model definitions and patterns
 - 💡 **[Examples](docs/EXAMPLES.md)** - Real-world use cases
-- 🚀 **[Advanced Features](docs/ADVANCED_FEATURES.md)** - Advanced functionality
+- 🚀 **[Features](docs/ADVANCED_FEATURES.md)** - Extended functionality
 - 🔄 **[Migration Guide](docs/MIGRATION_GUIDE.md)** - From other ORMs
 
-## 🏢 Advanced Features
+## 🏢 Features
 
 ### **Multi-tenant Architecture**
 
@@ -230,10 +245,10 @@ where: {
 }
 ```
 
-### **Complex Reporting**
+### **Reporting**
 
 ```javascript
-// Sophisticated JOIN scenarios
+// JOIN scenarios with proper aliasing
 const report = await processJoins(
   query,
   userModel,
@@ -242,13 +257,15 @@ const report = await processJoins(
       on: { published: true },
       where: { created_at: { gte: startDate } }
     },
-    comments: {
+    tags: {
       joinType: 'leftJoin',
-      on: { approved: true }
+      on: { active: true }
     }
   },
   relations
 )
+// Generated SQL: LEFT JOIN user_tags as ut ON u.id = ut.user_id
+//                LEFT JOIN tags as t ON ut.tag_id = t.id
 ```
 
 ### **Performance Optimization**
@@ -268,4 +285,4 @@ Apache 2.0 © [Hassaan](mailto:has5aan@outlook.com)
 
 ---
 
-**Built for applications that need sophisticated data access patterns.**
+**Built for applications that need flexible data access patterns.**

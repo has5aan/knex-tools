@@ -1,6 +1,6 @@
 # Models Guide
 
-Complete guide to defining and using models in knex-tools. Models are the foundation of the query system, defining structure, relationships, projections, and reusable query logic.
+Guide to defining and using models in knex-tools. Models are the foundation of the query system, defining structure, relationships, projections, and reusable query logic.
 
 ## Table of Contents
 
@@ -9,14 +9,14 @@ Complete guide to defining and using models in knex-tools. Models are the founda
 - [Projections](#projections)
 - [Relations](#relations)
 - [Modifiers](#modifiers)
-- [Advanced Patterns](#advanced-patterns)
+- [Patterns](#patterns)
 - [Best Practices](#best-practices)
 
 ---
 
 ## Model Anatomy
 
-A complete knex-tools model consists of four main sections:
+A knex-tools model consists of four main sections:
 
 ```javascript
 const userModel = {
@@ -26,8 +26,8 @@ const userModel = {
 
   // 2. Projections - REQUIRED for buildQuery
   projections: {
-    details: (knexInstance, alias) => [...],
-    summary: (knexInstance, alias) => [...]
+    details: (knexInstance, alias, relationName = null) => [...],
+    summary: (knexInstance, alias, relationName = null) => [...]
   },
 
   // 3. Relations - For data fetching and exists clause filtering
@@ -80,6 +80,16 @@ const userModel = {
 
 **REQUIRED for buildQuery** - Projections define what columns to select for different use cases. They're functions that return arrays of column expressions.
 
+**Projection Function Signature:**
+
+```javascript
+;(knexInstance, alias, relationName = null) => [...columns]
+```
+
+- **knexInstance**: Knex instance for raw queries and database operations
+- **alias**: Table alias for column references (e.g., 'u' for users table)
+- **relationName**: Optional relation name for column prefixing in JOINs
+
 > ⚠️ **Important**: The `buildQuery` function requires models to have at least one projection. Without projections, `buildQuery` will throw an error.
 
 ### Basic Projections
@@ -87,13 +97,13 @@ const userModel = {
 ```javascript
 projections: {
   // Simple column selection
-  summary: (knexInstance, alias) => [
+  summary: (knexInstance, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`
   ],
 
   // Full details
-  details: (knexInstance, alias) => [
+  details: (knexInstance, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`,
     `${alias}.email`,
@@ -103,18 +113,18 @@ projections: {
 }
 ```
 
-### Advanced Projections with Raw SQL
+### Projections with Raw SQL
 
 ```javascript
 projections: {
-  withStats: (knexInstance, alias) => [
+  withStats: (knexInstance, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`,
     knexInstance.raw(`COUNT(posts.id) as post_count`),
     knexInstance.raw(`MAX(posts.created_at) as last_post_date`)
   ],
 
-  computed: (knexInstance, alias) => [
+  computed: (knexInstance, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`,
     knexInstance.raw(`
@@ -132,7 +142,7 @@ projections: {
 
 ```javascript
 projections: {
-  forRole: (knexInstance, alias, { role }) => {
+  forRole: (knexInstance, alias, relationName = null, { role }) => {
     const base = [`${alias}.id`, `${alias}.name`]
 
     if (role === 'admin') {
@@ -154,7 +164,8 @@ projections: {
 1. **Always use alias parameter**: `${alias}.column` instead of hardcoded table names
 2. **Name projections by use case**: `summary`, `details`, `forApi`, `forReport`
 3. **Use knexInstance for raw SQL**: Access to `knex.raw()` and other methods
-4. **Keep projections focused**: Each projection should serve a specific purpose
+4. **Use relationName for column aliasing**: Third parameter enables column prefixing in joins
+5. **Keep projections focused**: Each projection should serve a specific purpose
 
 ---
 
@@ -223,6 +234,7 @@ relations: {
     table: 'tags',
     through: {
       table: 'user_tags',        // Junction table
+      alias: 'ut',               // Junction table alias (required)
       foreignKey: 'user_id',     // THIS model's key in junction
       otherKey: 'tag_id'         // OTHER model's key in junction
     },
@@ -271,8 +283,9 @@ const categoryModel = {
 
 1. **Use lazy loading for modelDefinition**: `() => require('./model')` prevents circular imports
 2. **Be explicit with keys**: Always specify `foreignKey` and `primaryKey`
-3. **Match your database**: Relation types should match your actual foreign key constraints
-4. **Use meaningful names**: Relation names should describe the relationship clearly
+3. **Always provide junction aliases**: For manyToMany relations, the `through.alias` field is required
+4. **Match your database**: Relation types should match your actual foreign key constraints
+5. **Use meaningful names**: Relation names should describe the relationship clearly
 
 ---
 
@@ -282,7 +295,7 @@ Modifiers are reusable functions that apply common query logic. They come in two
 
 ### Default Modifiers - Horizontal Partitioning
 
-Default modifiers are automatically applied to every query using the model. Perfect for:
+Default modifiers are automatically applied to every query using the model. Used for:
 
 - Soft deletes
 - Multi-tenancy
@@ -331,11 +344,11 @@ module.exports = {
 
 ### Named Modifiers - Parameterized Logic
 
-Named modifiers are manually applied with parameters. Perfect for:
+Named modifiers are manually applied with parameters. Used for:
 
 - Role-based filtering
 - Date range queries
-- Complex business logic
+- Business logic
 - Conditional joins
 
 ```javascript
@@ -408,7 +421,7 @@ All modifiers follow the same signature:
 
 ---
 
-## Advanced Patterns
+## Patterns
 
 ### Model Inheritance
 
@@ -421,7 +434,11 @@ const baseUserModel = {
   alias: 'u',
   columns: ['id', 'name', 'email', 'role', 'active'],
   projections: {
-    details: (knex, alias) => [`${alias}.id`, `${alias}.name`, `${alias}.email`]
+    details: (knex, alias, relationName = null) => [
+      `${alias}.id`,
+      `${alias}.name`,
+      `${alias}.email`
+    ]
   }
 }
 
@@ -448,7 +465,7 @@ module.exports = {
   projections: {
     ...baseUserModel.projections,
     // Add admin-specific projections
-    withPermissions: (knex, alias) => [
+    withPermissions: (knex, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       knex.raw(`array_agg(permissions.name) as permissions`)
@@ -484,7 +501,7 @@ projections: {
 }
 ```
 
-### Complex Modifiers with Subqueries
+### Modifiers with Subqueries
 
 ```javascript
 modifiers: {
@@ -554,12 +571,12 @@ modifiers: {
 ```javascript
 projections: {
   // Lightweight projection for lists
-  summary: (knex, alias) => [
+  summary: (knex, alias, relationName = null) => [
     `${alias}.id`, `${alias}.name`, `${alias}.created_at`
   ],
 
   // Heavy projection with computed fields for details
-  full: (knex, alias) => [
+  full: (knex, alias, relationName = null) => [
     `${alias}.*`,
     knex.raw(`
       (SELECT COUNT(*) FROM posts WHERE user_id = ${alias}.id) as post_count
@@ -651,4 +668,4 @@ module.exports = {
 }
 ```
 
-This guide provides the foundation for building robust, secure, and maintainable models with knex-tools. Models are the key to leveraging the full power of the query system.
+This guide provides the foundation for building secure and maintainable models with knex-tools. Models are the key to leveraging the query system.
