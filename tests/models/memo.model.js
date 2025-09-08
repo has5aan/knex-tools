@@ -17,7 +17,9 @@ module.exports = {
       const prefix = relationName ? `${relationName}_` : ''
       return [
         `${alias}.id as ${prefix}id`,
-        knexInstance.raw(`substr(${alias}.content, 1, 32) as ${prefix}content`)
+        knexInstance.raw(`substr(${alias}.content, 1, 32) as ${prefix}content`),
+        `${alias}.user_id as ${prefix}user_id`,
+        `${alias}.folder_id as ${prefix}folder_id`
       ]
     },
     basic: function (_, alias, relationName = null) {

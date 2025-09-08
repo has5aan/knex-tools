@@ -1405,7 +1405,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'select *, `f`.`id` as `folder_id`, `f`.`name` as `folder_name`, `f`.`user_id` as `folder_user_id`, `parent`.`id` as `parent_id`, `parent`.`name` as `parent_name`, `parent`.`user_id` as `parent_user_id` from `memo` as `m` left join `folder` as `f` on `f`.`id` = `m`.`folder_id` left join `folder` as `parent` on `parent`.`id` = `f`.`parent_id`',
+            sql: 'select *, `f`.`id` as `folder_id`, `f`.`name` as `folder_name`, `f`.`user_id` as `folder_user_id`, `f`.`parent_id` as `folder_parent_id`, `parent`.`id` as `parent_id`, `parent`.`name` as `parent_name`, `parent`.`user_id` as `parent_user_id`, `parent`.`parent_id` as `parent_parent_id` from `memo` as `m` left join `folder` as `f` on `f`.`id` = `m`.`folder_id` left join `folder` as `parent` on `parent`.`id` = `f`.`parent_id`',
             bindings: []
           }
         }
@@ -1508,9 +1508,15 @@ describe('knexTools', () => {
             where: { user_id: 1 }
           },
           expected: {
-            length: 2,
-            properties: ['id', 'content'],
-            contentMatch: /Important meeting notes/
+            data: [
+              {
+                id: 1,
+                content: 'Important meeting notes',
+                user_id: 1,
+                folder_id: 1
+              },
+              { id: 2, content: 'Shopping list', user_id: 1, folder_id: 2 }
+            ]
           }
         },
         {
@@ -1521,31 +1527,30 @@ describe('knexTools', () => {
             where: { id: 1 }
           },
           expected: {
-            length: 1,
-            properties: ['id', 'content'],
-            missingProperties: ['user_id', 'folder_id']
+            data: [{ id: 1, content: 'Important meeting notes' }]
           }
         },
         {
           name: 'query with sorting and paging',
           model: memoModel,
           queryConfig: {
-            projection: 'details',
+            projection: 'short',
             orderBy: { id: 'desc' },
             take: 2,
             skip: 0
           },
           expected: {
-            length: 2,
-            firstId: 5,
-            secondId: 4
+            data: [
+              { id: 5, content: 'Orphaned memo', user_id: null, folder_id: 1 },
+              { id: 4, content: 'Untagged memo', user_id: 2, folder_id: 3 }
+            ]
           }
         },
         {
           name: 'buildQuery with _exists filter for RLS',
           model: memoModel,
           queryConfig: {
-            projection: 'details',
+            projection: 'short',
             where: {
               _exists: {
                 user: {
@@ -1555,8 +1560,15 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            length: 2,
-            userIds: [1, 1]
+            data: [
+              {
+                id: 1,
+                content: 'Important meeting notes',
+                user_id: 1,
+                folder_id: 1
+              },
+              { id: 2, content: 'Shopping list', user_id: 1, folder_id: 2 }
+            ]
           }
         }
       ]
@@ -1565,36 +1577,7 @@ describe('knexTools', () => {
         '$name',
         async ({ model, queryConfig, expected }) => {
           const result = await knexTools.buildQuery(db, model, queryConfig)
-
-          expect(result.data).toHaveLength(expected.length)
-
-          if (expected.properties) {
-            expected.properties.forEach(prop => {
-              expect(result.data[0]).toHaveProperty(prop)
-            })
-          }
-
-          if (expected.missingProperties) {
-            expected.missingProperties.forEach(prop => {
-              expect(result.data[0]).not.toHaveProperty(prop)
-            })
-          }
-
-          if (expected.contentMatch) {
-            expect(result.data[0].content).toMatch(expected.contentMatch)
-          }
-
-          if (expected.firstId) {
-            expect(result.data[0].id).toBe(expected.firstId)
-          }
-
-          if (expected.secondId) {
-            expect(result.data[1].id).toBe(expected.secondId)
-          }
-
-          if (expected.userIds) {
-            expect(result.data.map(r => r.user_id)).toEqual(expected.userIds)
-          }
+          expect(result).toEqual(expected)
         }
       )
     })
@@ -1606,7 +1589,7 @@ describe('knexTools', () => {
             name: 'query with belongsTo relation',
             model: memoModel,
             queryConfig: {
-              projection: 'details',
+              projection: 'short',
               where: { id: 1 },
               each: {
                 user: {
@@ -1615,12 +1598,43 @@ describe('knexTools', () => {
               }
             },
             expected: {
-              length: 1,
-              userProperties: {
-                id: 1,
-                name: 'Alice',
-                email: 'alice@example.com'
+              data: [
+                {
+                  id: 1,
+                  content: 'Important meeting notes',
+                  user_id: 1,
+                  folder_id: 1,
+                  user: {
+                    data: {
+                      id: 1,
+                      name: 'Alice',
+                      email: 'alice@example.com'
+                    }
+                  }
+                }
+              ]
+            }
+          },
+          {
+            name: 'belongsTo relation returns null when foreign key is null',
+            model: memoModel,
+            queryConfig: {
+              projection: 'short',
+              where: { id: 5 }, // Target the intentionally orphaned memo
+              each: {
+                user: { projection: 'short' }
               }
+            },
+            expected: {
+              data: [
+                {
+                  id: 5,
+                  content: 'Orphaned memo',
+                  user_id: null,
+                  folder_id: 1,
+                  user: null
+                }
+              ]
             }
           }
         ]
@@ -1629,30 +1643,9 @@ describe('knexTools', () => {
           '$name',
           async ({ model, queryConfig, expected }) => {
             const result = await knexTools.buildQuery(db, model, queryConfig)
-
-            expect(result.data).toHaveLength(expected.length)
-
-            if (expected.userProperties) {
-              expect(result.data[0].user.data).toEqual(expected.userProperties)
-            }
+            expect(result).toEqual(expected)
           }
         )
-
-        test('belongsTo relation returns null when foreign key is null', async () => {
-          const result = await knexTools.buildQuery(db, memoModel, {
-            projection: 'short',
-            where: { id: 5 }, // Target the intentionally orphaned memo
-            each: {
-              user: { projection: 'short' }
-            }
-          })
-
-          expect(result).toHaveProperty('data')
-          expect(result.data).toHaveLength(1)
-          expect(result.data[0]).toHaveProperty('user')
-          expect(result.data[0].user).toBe(null)
-          expect(result.data[0].content).toBe('Orphaned memo')
-        })
       })
 
       describe('hasMany relationships', () => {
@@ -1661,7 +1654,7 @@ describe('knexTools', () => {
             name: 'query with hasMany relation',
             model: userModel,
             queryConfig: {
-              projection: 'details',
+              projection: 'short',
               where: { id: 1 },
               each: {
                 folders: {
@@ -1670,9 +1663,42 @@ describe('knexTools', () => {
               }
             },
             expected: {
-              length: 1,
-              foldersLength: 2,
-              folderProperties: ['id', 'name']
+              data: [
+                {
+                  id: 1,
+                  name: 'Alice',
+                  email: 'alice@example.com',
+                  folders: {
+                    data: [
+                      { id: 1, name: 'Work', user_id: 1, parent_id: null },
+                      { id: 2, name: 'Personal', user_id: 1, parent_id: null }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            name: 'hasMany relation returns empty data array when no records exist',
+            model: userModel,
+            queryConfig: {
+              projection: 'short',
+              where: { id: 3 }, // Target Charlie who intentionally has no memos
+              each: {
+                memos: { projection: 'short' }
+              }
+            },
+            expected: {
+              data: [
+                {
+                  id: 3,
+                  name: 'Charlie',
+                  email: 'charlie@example.com',
+                  memos: {
+                    data: []
+                  }
+                }
+              ]
             }
           }
         ]
@@ -1681,18 +1707,7 @@ describe('knexTools', () => {
           '$name',
           async ({ model, queryConfig, expected }) => {
             const result = await knexTools.buildQuery(db, model, queryConfig)
-
-            expect(result.data).toHaveLength(expected.length)
-            expect(result.data[0].folders).toBeDefined()
-            expect(result.data[0].folders.data).toHaveLength(
-              expected.foldersLength
-            )
-
-            if (expected.folderProperties) {
-              expected.folderProperties.forEach(prop => {
-                expect(result.data[0].folders.data[0]).toHaveProperty(prop)
-              })
-            }
+            expect(result).toEqual(expected)
           }
         )
 
@@ -1705,12 +1720,18 @@ describe('knexTools', () => {
             }
           })
 
-          expect(result).toHaveProperty('data')
-          expect(result.data).toHaveLength(1)
-          expect(result.data[0]).toHaveProperty('memos')
-          expect(result.data[0].memos).toHaveProperty('data')
-          expect(result.data[0].memos.data).toEqual([])
-          expect(result.data[0].name).toBe('Charlie')
+          expect(result).toEqual({
+            data: [
+              {
+                id: 3,
+                name: 'Charlie',
+                email: 'charlie@example.com',
+                memos: {
+                  data: []
+                }
+              }
+            ]
+          })
         })
       })
 
@@ -1720,7 +1741,7 @@ describe('knexTools', () => {
             name: 'query with manyToMany relation',
             model: memoModel,
             queryConfig: {
-              projection: 'details',
+              projection: 'short',
               where: { id: 1 },
               each: {
                 tags: {
@@ -1729,9 +1750,20 @@ describe('knexTools', () => {
               }
             },
             expected: {
-              length: 1,
-              tagsLength: 2,
-              tagNames: ['urgent', 'work']
+              data: [
+                {
+                  id: 1,
+                  content: 'Important meeting notes',
+                  user_id: 1,
+                  folder_id: 1,
+                  tags: {
+                    data: [
+                      { id: 1, name: 'urgent' },
+                      { id: 3, name: 'work' }
+                    ]
+                  }
+                }
+              ]
             }
           }
         ]
@@ -1740,16 +1772,7 @@ describe('knexTools', () => {
           '$name',
           async ({ model, queryConfig, expected }) => {
             const result = await knexTools.buildQuery(db, model, queryConfig)
-
-            expect(result.data).toHaveLength(expected.length)
-            expect(result.data[0].tags.data).toHaveLength(expected.tagsLength)
-
-            if (expected.tagNames) {
-              const resultTagNames = result.data[0].tags.data.map(t => t.name)
-              expected.tagNames.forEach(tagName => {
-                expect(resultTagNames).toContain(tagName)
-              })
-            }
+            expect(result).toEqual(expected)
           }
         )
 
@@ -1762,12 +1785,19 @@ describe('knexTools', () => {
             }
           })
 
-          expect(result).toHaveProperty('data')
-          expect(result.data).toHaveLength(1)
-          expect(result.data[0]).toHaveProperty('tags')
-          expect(result.data[0].tags).toHaveProperty('data')
-          expect(result.data[0].tags.data).toEqual([])
-          expect(result.data[0].content).toBe('Untagged memo')
+          expect(result).toEqual({
+            data: [
+              {
+                id: 4,
+                content: 'Untagged memo',
+                user_id: 2,
+                folder_id: 3,
+                tags: {
+                  data: []
+                }
+              }
+            ]
+          })
         })
       })
     })
@@ -1778,14 +1808,14 @@ describe('knexTools', () => {
           name: 'query with nested each relations',
           model: memoModel,
           queryConfig: {
-            projection: 'details',
-            where: { user_id: 1 },
+            projection: 'short',
+            where: { id: 1 },
             each: {
               user: {
                 projection: 'short'
               },
               folder: {
-                projection: 'details',
+                projection: 'short',
                 each: {
                   user: {
                     projection: 'short'
@@ -1793,24 +1823,54 @@ describe('knexTools', () => {
                 }
               },
               tags: {
-                projection: 'short',
-                orderBy: { name: 'asc' }
+                projection: 'short'
               }
             }
           },
           expected: {
-            length: 2,
-            userName: 'Alice',
-            folderName: 'Work',
-            nestedUserName: 'Alice',
-            firstTagName: 'urgent'
+            data: [
+              {
+                id: 1,
+                content: 'Important meeting notes',
+                user_id: 1,
+                folder_id: 1,
+                user: {
+                  data: {
+                    id: 1,
+                    name: 'Alice',
+                    email: 'alice@example.com'
+                  }
+                },
+                folder: {
+                  data: {
+                    id: 1,
+                    name: 'Work',
+                    user_id: 1,
+                    parent_id: null,
+                    user: {
+                      data: {
+                        id: 1,
+                        name: 'Alice',
+                        email: 'alice@example.com'
+                      }
+                    }
+                  }
+                },
+                tags: {
+                  data: [
+                    { id: 1, name: 'urgent' },
+                    { id: 3, name: 'work' }
+                  ]
+                }
+              }
+            ]
           }
         },
         {
           name: 'query with filtered relations',
           model: memoModel,
           queryConfig: {
-            projection: 'details',
+            projection: 'short',
             where: { user_id: 1 },
             each: {
               tags: {
@@ -1820,10 +1880,26 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            length: 2,
-            firstMemoTagsLength: 1,
-            firstMemoTagName: 'urgent',
-            secondMemoTagsLength: 0
+            data: [
+              {
+                id: 1,
+                content: 'Important meeting notes',
+                user_id: 1,
+                folder_id: 1,
+                tags: {
+                  data: [{ id: 1, name: 'urgent' }]
+                }
+              },
+              {
+                id: 2,
+                content: 'Shopping list',
+                user_id: 1,
+                folder_id: 2,
+                tags: {
+                  data: []
+                }
+              }
+            ]
           }
         }
       ]
@@ -1832,47 +1908,7 @@ describe('knexTools', () => {
         '$name',
         async ({ model, queryConfig, expected }) => {
           const result = await knexTools.buildQuery(db, model, queryConfig)
-
-          expect(result.data).toHaveLength(expected.length)
-
-          if (expected.userName) {
-            expect(result.data[0].user.data.name).toBe(expected.userName)
-          }
-
-          if (expected.folderName) {
-            expect(result.data[0].folder.data.name).toBe(expected.folderName)
-          }
-
-          if (expected.nestedUserName) {
-            expect(result.data[0].folder.data).toHaveProperty('user')
-            if (result.data[0].folder.data.user) {
-              expect(result.data[0].folder.data.user.data.name).toBe(
-                expected.nestedUserName
-              )
-            }
-          }
-
-          if (expected.firstTagName) {
-            expect(result.data[0].tags.data[0].name).toBe(expected.firstTagName)
-          }
-
-          if (expected.firstMemoTagsLength !== undefined) {
-            expect(result.data[0].tags.data).toHaveLength(
-              expected.firstMemoTagsLength
-            )
-          }
-
-          if (expected.firstMemoTagName) {
-            expect(result.data[0].tags.data[0].name).toBe(
-              expected.firstMemoTagName
-            )
-          }
-
-          if (expected.secondMemoTagsLength !== undefined) {
-            expect(result.data[1].tags.data).toHaveLength(
-              expected.secondMemoTagsLength
-            )
-          }
+          expect(result).toEqual(expected)
         }
       )
 
@@ -1890,14 +1926,21 @@ describe('knexTools', () => {
           }
         })
 
-        expect(result).toHaveProperty('data')
-        expect(result.data).toHaveLength(1)
-        expect(result.data[0]).toHaveProperty('memos')
-        expect(result.data[0].memos).toHaveProperty('data')
-        expect(result.data[0].memos).toHaveProperty('metadata')
-        expect(result.data[0].memos.data).toEqual([])
-        expect(result.data[0].memos.metadata).toBeDefined()
-        expect(result.data[0].name).toBe('Charlie')
+        expect(result).toEqual({
+          data: [
+            {
+              id: 3,
+              name: 'Charlie',
+              email: 'charlie@example.com',
+              memos: {
+                data: [],
+                metadata: {
+                  counts: {}
+                }
+              }
+            }
+          ]
+        })
       })
     })
 
@@ -1934,6 +1977,36 @@ describe('knexTools', () => {
             }
           },
           expectedError: "Modifier 'nonexistent' not found in model"
+        },
+        {
+          name: 'error handling for belongsTo relation without foreign key in projection',
+          model: memoModel,
+          queryConfig: {
+            projection: 'basic', // basic projection doesn't include user_id
+            where: { id: 1 },
+            each: {
+              user: {
+                projection: 'short'
+              }
+            }
+          },
+          expectedError:
+            "Cannot populate 'user' relation: projection must include 'user_id' field"
+        },
+        {
+          name: 'error handling for belongsTo relation without foreign key in projection (folder relation)',
+          model: memoModel,
+          queryConfig: {
+            projection: 'basic', // basic projection doesn't include folder_id
+            where: { id: 1 },
+            each: {
+              folder: {
+                projection: 'short'
+              }
+            }
+          },
+          expectedError:
+            "Cannot populate 'folder' relation: projection must include 'folder_id' field"
         }
       ]
 
@@ -1945,6 +2018,22 @@ describe('knexTools', () => {
           ).rejects.toThrow(expectedError)
         }
       )
+
+      test('belongsTo relation validation is skipped when no records returned', async () => {
+        // This should not throw even though 'basic' projection doesn't include user_id
+        // because there are no records to validate
+        const result = await knexTools.buildQuery(db, memoModel, {
+          projection: 'basic', // doesn't include user_id
+          where: { id: 999 }, // non-existent record
+          each: {
+            user: { projection: 'short' }
+          }
+        })
+
+        expect(result).toEqual({
+          data: []
+        })
+      })
     })
 
     describe('modifiers', () => {
@@ -1956,22 +2045,28 @@ describe('knexTools', () => {
             projection: 'basic'
           },
           expected: {
-            length: 1, // Only long content memos (> 15 chars)
-            firstContent: 'Important meeting notes'
+            data: [{ id: 1, content: 'Important meeting notes' }]
           }
         },
         {
           name: 'applies parameterized modifier with object parameters',
           model: memoModel,
           queryConfig: {
-            projection: 'details',
+            projection: 'short',
             modifiers: {
               forUser: { userId: 1 }
             }
           },
           expected: {
-            length: 2, // User 1 has 2 memos
-            userIds: [1, 1] // Both should have user_id = 1
+            data: [
+              {
+                id: 1,
+                content: 'Important meeting notes',
+                user_id: 1,
+                folder_id: 1
+              },
+              { id: 2, content: 'Shopping list', user_id: 1, folder_id: 2 }
+            ]
           }
         }
       ]
@@ -1980,20 +2075,7 @@ describe('knexTools', () => {
         '$name',
         async ({ model, queryConfig, expected }) => {
           const result = await knexTools.buildQuery(db, model, queryConfig)
-
-          expect(result.data).toHaveLength(expected.length)
-
-          if (expected.firstContent) {
-            expect(result.data[0].content).toBe(expected.firstContent)
-          }
-
-          if (expected.secondContent) {
-            expect(result.data[1].content).toBe(expected.secondContent)
-          }
-
-          if (expected.userIds) {
-            expect(result.data.map(r => r.user_id)).toEqual(expected.userIds)
-          }
+          expect(result).toEqual(expected)
         }
       )
     })

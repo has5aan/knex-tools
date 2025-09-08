@@ -778,6 +778,13 @@ async function populateBelongsToRelation(
   relationKey,
   relationQuery
 ) {
+  // Validate that foreign key is included in projection
+  if (records.length > 0 && !(relation.foreignKey in records[0])) {
+    throw new Error(
+      `Cannot populate '${relationKey}' relation: projection must include '${relation.foreignKey}' field`
+    )
+  }
+
   // Get unique foreign key values
   const foreignKeys = [
     ...new Set(
