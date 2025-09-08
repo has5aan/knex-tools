@@ -1462,22 +1462,26 @@ describe('knexTools', () => {
   })
   describe('buildQuery', () => {
     beforeEach(async () => {
-      // Insert test data
+      // Insert test data with intentional empty relations
       await db('user').insert([
         { id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' },
-        { id: 2, name: 'Bob', email: 'bob@example.com', role: 'user' }
+        { id: 2, name: 'Bob', email: 'bob@example.com', role: 'user' },
+        { id: 3, name: 'Charlie', email: 'charlie@example.com', role: 'user' } // Intentionally has no memos/folders
       ])
 
       await db('folder').insert([
         { id: 1, name: 'Work', user_id: 1 },
         { id: 2, name: 'Personal', user_id: 1 },
         { id: 3, name: 'Projects', user_id: 2 }
+        // Note: Charlie (user #3) intentionally has no folders
       ])
 
       await db('memo').insert([
         { id: 1, content: 'Important meeting notes', user_id: 1, folder_id: 1 },
         { id: 2, content: 'Shopping list', user_id: 1, folder_id: 2 },
-        { id: 3, content: 'Project ideas', user_id: 2, folder_id: 3 }
+        { id: 3, content: 'Project ideas', user_id: 2, folder_id: 3 },
+        { id: 4, content: 'Untagged memo', user_id: 2, folder_id: 3 }, // Intentionally has no tags
+        { id: 5, content: 'Orphaned memo', user_id: null, folder_id: 1 } // Intentionally has null user_id
       ])
 
       await db('tag').insert([
@@ -1490,6 +1494,7 @@ describe('knexTools', () => {
         { memo_id: 1, tag_id: 1 },
         { memo_id: 1, tag_id: 3 },
         { memo_id: 2, tag_id: 2 }
+        // Note: memo #4 and #5 intentionally get no junction records
       ])
     })
 
@@ -1532,8 +1537,8 @@ describe('knexTools', () => {
           },
           expected: {
             length: 2,
-            firstId: 3,
-            secondId: 2
+            firstId: 5,
+            secondId: 4
           }
         },
         {
@@ -1561,34 +1566,34 @@ describe('knexTools', () => {
         async ({ model, queryConfig, expected }) => {
           const result = await knexTools.buildQuery(db, model, queryConfig)
 
-          expect(result).toHaveLength(expected.length)
+          expect(result.data).toHaveLength(expected.length)
 
           if (expected.properties) {
             expected.properties.forEach(prop => {
-              expect(result[0]).toHaveProperty(prop)
+              expect(result.data[0]).toHaveProperty(prop)
             })
           }
 
           if (expected.missingProperties) {
             expected.missingProperties.forEach(prop => {
-              expect(result[0]).not.toHaveProperty(prop)
+              expect(result.data[0]).not.toHaveProperty(prop)
             })
           }
 
           if (expected.contentMatch) {
-            expect(result[0].content).toMatch(expected.contentMatch)
+            expect(result.data[0].content).toMatch(expected.contentMatch)
           }
 
           if (expected.firstId) {
-            expect(result[0].id).toBe(expected.firstId)
+            expect(result.data[0].id).toBe(expected.firstId)
           }
 
           if (expected.secondId) {
-            expect(result[1].id).toBe(expected.secondId)
+            expect(result.data[1].id).toBe(expected.secondId)
           }
 
           if (expected.userIds) {
-            expect(result.map(r => r.user_id)).toEqual(expected.userIds)
+            expect(result.data.map(r => r.user_id)).toEqual(expected.userIds)
           }
         }
       )
@@ -1625,13 +1630,29 @@ describe('knexTools', () => {
           async ({ model, queryConfig, expected }) => {
             const result = await knexTools.buildQuery(db, model, queryConfig)
 
-            expect(result).toHaveLength(expected.length)
+            expect(result.data).toHaveLength(expected.length)
 
             if (expected.userProperties) {
-              expect(result[0].user).toEqual(expected.userProperties)
+              expect(result.data[0].user.data).toEqual(expected.userProperties)
             }
           }
         )
+
+        test('belongsTo relation returns null when foreign key is null', async () => {
+          const result = await knexTools.buildQuery(db, memoModel, {
+            projection: 'short',
+            where: { id: 5 }, // Target the intentionally orphaned memo
+            each: {
+              user: { projection: 'short' }
+            }
+          })
+
+          expect(result).toHaveProperty('data')
+          expect(result.data).toHaveLength(1)
+          expect(result.data[0]).toHaveProperty('user')
+          expect(result.data[0].user).toBe(null)
+          expect(result.data[0].content).toBe('Orphaned memo')
+        })
       })
 
       describe('hasMany relationships', () => {
@@ -1661,17 +1682,36 @@ describe('knexTools', () => {
           async ({ model, queryConfig, expected }) => {
             const result = await knexTools.buildQuery(db, model, queryConfig)
 
-            expect(result).toHaveLength(expected.length)
-            expect(result[0].folders).toBeDefined()
-            expect(result[0].folders).toHaveLength(expected.foldersLength)
+            expect(result.data).toHaveLength(expected.length)
+            expect(result.data[0].folders).toBeDefined()
+            expect(result.data[0].folders.data).toHaveLength(
+              expected.foldersLength
+            )
 
             if (expected.folderProperties) {
               expected.folderProperties.forEach(prop => {
-                expect(result[0].folders[0]).toHaveProperty(prop)
+                expect(result.data[0].folders.data[0]).toHaveProperty(prop)
               })
             }
           }
         )
+
+        test('hasMany relation returns empty data array when no records exist', async () => {
+          const result = await knexTools.buildQuery(db, userModel, {
+            projection: 'short',
+            where: { id: 3 }, // Target Charlie who intentionally has no memos
+            each: {
+              memos: { projection: 'short' }
+            }
+          })
+
+          expect(result).toHaveProperty('data')
+          expect(result.data).toHaveLength(1)
+          expect(result.data[0]).toHaveProperty('memos')
+          expect(result.data[0].memos).toHaveProperty('data')
+          expect(result.data[0].memos.data).toEqual([])
+          expect(result.data[0].name).toBe('Charlie')
+        })
       })
 
       describe('manyToMany relationships', () => {
@@ -1701,17 +1741,34 @@ describe('knexTools', () => {
           async ({ model, queryConfig, expected }) => {
             const result = await knexTools.buildQuery(db, model, queryConfig)
 
-            expect(result).toHaveLength(expected.length)
-            expect(result[0].tags).toHaveLength(expected.tagsLength)
+            expect(result.data).toHaveLength(expected.length)
+            expect(result.data[0].tags.data).toHaveLength(expected.tagsLength)
 
             if (expected.tagNames) {
-              const resultTagNames = result[0].tags.map(t => t.name)
+              const resultTagNames = result.data[0].tags.data.map(t => t.name)
               expected.tagNames.forEach(tagName => {
                 expect(resultTagNames).toContain(tagName)
               })
             }
           }
         )
+
+        test('manyToMany relation returns empty data array when no junction records exist', async () => {
+          const result = await knexTools.buildQuery(db, memoModel, {
+            projection: 'short',
+            where: { id: 4 }, // Target the intentionally untagged memo
+            each: {
+              tags: { projection: 'short' }
+            }
+          })
+
+          expect(result).toHaveProperty('data')
+          expect(result.data).toHaveLength(1)
+          expect(result.data[0]).toHaveProperty('tags')
+          expect(result.data[0].tags).toHaveProperty('data')
+          expect(result.data[0].tags.data).toEqual([])
+          expect(result.data[0].content).toBe('Untagged memo')
+        })
       })
     })
 
@@ -1776,40 +1833,72 @@ describe('knexTools', () => {
         async ({ model, queryConfig, expected }) => {
           const result = await knexTools.buildQuery(db, model, queryConfig)
 
-          expect(result).toHaveLength(expected.length)
+          expect(result.data).toHaveLength(expected.length)
 
           if (expected.userName) {
-            expect(result[0].user.name).toBe(expected.userName)
+            expect(result.data[0].user.data.name).toBe(expected.userName)
           }
 
           if (expected.folderName) {
-            expect(result[0].folder.name).toBe(expected.folderName)
+            expect(result.data[0].folder.data.name).toBe(expected.folderName)
           }
 
           if (expected.nestedUserName) {
-            expect(result[0].folder).toHaveProperty('user')
-            if (result[0].folder.user) {
-              expect(result[0].folder.user.name).toBe(expected.nestedUserName)
+            expect(result.data[0].folder.data).toHaveProperty('user')
+            if (result.data[0].folder.data.user) {
+              expect(result.data[0].folder.data.user.data.name).toBe(
+                expected.nestedUserName
+              )
             }
           }
 
           if (expected.firstTagName) {
-            expect(result[0].tags[0].name).toBe(expected.firstTagName)
+            expect(result.data[0].tags.data[0].name).toBe(expected.firstTagName)
           }
 
           if (expected.firstMemoTagsLength !== undefined) {
-            expect(result[0].tags).toHaveLength(expected.firstMemoTagsLength)
+            expect(result.data[0].tags.data).toHaveLength(
+              expected.firstMemoTagsLength
+            )
           }
 
           if (expected.firstMemoTagName) {
-            expect(result[0].tags[0].name).toBe(expected.firstMemoTagName)
+            expect(result.data[0].tags.data[0].name).toBe(
+              expected.firstMemoTagName
+            )
           }
 
           if (expected.secondMemoTagsLength !== undefined) {
-            expect(result[1].tags).toHaveLength(expected.secondMemoTagsLength)
+            expect(result.data[1].tags.data).toHaveLength(
+              expected.secondMemoTagsLength
+            )
           }
         }
       )
+
+      test('empty relations maintain consistent format with metadata', async () => {
+        const result = await knexTools.buildQuery(db, userModel, {
+          projection: 'short',
+          where: { id: 3 }, // Target Charlie who intentionally has no memos
+          each: {
+            memos: {
+              projection: 'short',
+              metadata: {
+                counts: ['total']
+              }
+            }
+          }
+        })
+
+        expect(result).toHaveProperty('data')
+        expect(result.data).toHaveLength(1)
+        expect(result.data[0]).toHaveProperty('memos')
+        expect(result.data[0].memos).toHaveProperty('data')
+        expect(result.data[0].memos).toHaveProperty('metadata')
+        expect(result.data[0].memos.data).toEqual([])
+        expect(result.data[0].memos.metadata).toBeDefined()
+        expect(result.data[0].name).toBe('Charlie')
+      })
     })
 
     describe('error handling', () => {
@@ -1892,18 +1981,261 @@ describe('knexTools', () => {
         async ({ model, queryConfig, expected }) => {
           const result = await knexTools.buildQuery(db, model, queryConfig)
 
-          expect(result).toHaveLength(expected.length)
+          expect(result.data).toHaveLength(expected.length)
 
           if (expected.firstContent) {
-            expect(result[0].content).toBe(expected.firstContent)
+            expect(result.data[0].content).toBe(expected.firstContent)
           }
 
           if (expected.secondContent) {
-            expect(result[1].content).toBe(expected.secondContent)
+            expect(result.data[1].content).toBe(expected.secondContent)
           }
 
           if (expected.userIds) {
-            expect(result.map(r => r.user_id)).toEqual(expected.userIds)
+            expect(result.data.map(r => r.user_id)).toEqual(expected.userIds)
+          }
+        }
+      )
+    })
+  })
+
+  describe('metadata counts', () => {
+    beforeEach(async () => {
+      // Insert test data
+      await db('user').insert([
+        { id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' },
+        { id: 2, name: 'Bob', email: 'bob@example.com', role: 'user' }
+      ])
+
+      await db('folder').insert([
+        { id: 1, name: 'Work', user_id: 1 },
+        { id: 2, name: 'Personal', user_id: 1 },
+        { id: 3, name: 'Projects', user_id: 2 }
+      ])
+
+      await db('memo').insert([
+        { id: 1, content: 'Important meeting notes', user_id: 1, folder_id: 1 },
+        { id: 2, content: 'Shopping list', user_id: 1, folder_id: 2 },
+        { id: 3, content: 'Project ideas', user_id: 2, folder_id: 3 }
+      ])
+
+      await db('tag').insert([
+        { id: 1, name: 'urgent' },
+        { id: 2, name: 'personal' },
+        { id: 3, name: 'work' }
+      ])
+
+      await db('memo_tag').insert([
+        { memo_id: 1, tag_id: 1 },
+        { memo_id: 1, tag_id: 3 },
+        { memo_id: 2, tag_id: 2 }
+      ])
+    })
+
+    describe('basic count metadata', () => {
+      const testCases = [
+        {
+          name: 'basic total count',
+          model: memoModel,
+          queryConfig: {
+            projection: 'details',
+            metadata: {
+              counts: {
+                total: true
+              }
+            }
+          },
+          expected: {
+            dataLength: 3,
+            totalCount: 3
+          }
+        },
+        {
+          name: 'basic filtered count',
+          model: memoModel,
+          queryConfig: {
+            projection: 'details',
+            where: { user_id: 1 },
+            metadata: {
+              counts: {
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            dataLength: 2,
+            filteredCount: 2
+          }
+        },
+        {
+          name: 'both total and filtered counts',
+          model: memoModel,
+          queryConfig: {
+            projection: 'details',
+            where: { user_id: 1 },
+            metadata: {
+              counts: {
+                total: true,
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            dataLength: 2,
+            totalCount: 3,
+            filteredCount: 2
+          }
+        }
+      ]
+
+      test.each(testCases)(
+        '$name',
+        async ({ model, queryConfig, expected }) => {
+          const result = await knexTools.buildQuery(db, model, queryConfig)
+
+          // Check data structure
+          expect(result).toHaveProperty('data')
+          expect(result.data).toHaveLength(expected.dataLength)
+
+          // Check metadata structure
+          if (
+            expected.totalCount !== undefined ||
+            expected.filteredCount !== undefined
+          ) {
+            expect(result).toHaveProperty('metadata')
+            expect(result.metadata).toHaveProperty('counts')
+
+            if (expected.totalCount !== undefined) {
+              expect(result.metadata.counts.total).toBe(expected.totalCount)
+            }
+
+            if (expected.filteredCount !== undefined) {
+              expect(result.metadata.counts.filtered).toBe(
+                expected.filteredCount
+              )
+            }
+          }
+        }
+      )
+    })
+
+    describe('relation metadata', () => {
+      const testCases = [
+        {
+          name: 'metadata on belongsTo relation',
+          model: memoModel,
+          queryConfig: {
+            projection: 'details',
+            where: { id: 1 },
+            each: {
+              user: {
+                projection: 'short',
+                metadata: {
+                  counts: {
+                    total: true
+                  }
+                }
+              }
+            },
+            metadata: {
+              counts: { total: true } // Add main metadata for consistent format
+            }
+          },
+          expected: {
+            dataLength: 1,
+            userTotal: 2
+          }
+        },
+        {
+          name: 'metadata on hasMany relation',
+          model: userModel,
+          queryConfig: {
+            projection: 'details',
+            where: { id: 1 },
+            each: {
+              folders: {
+                projection: 'short',
+                metadata: {
+                  counts: {
+                    filtered: true
+                  }
+                }
+              }
+            },
+            metadata: {
+              counts: { total: true } // Add main metadata for consistent format
+            }
+          },
+          expected: {
+            dataLength: 1,
+            foldersFiltered: 2
+          }
+        },
+        {
+          name: 'metadata on manyToMany relation',
+          model: memoModel,
+          queryConfig: {
+            projection: 'details',
+            where: { id: 1 },
+            each: {
+              tags: {
+                projection: 'short',
+                metadata: {
+                  counts: {
+                    total: true,
+                    filtered: true
+                  }
+                }
+              }
+            },
+            metadata: {
+              counts: { total: true } // Add main metadata for consistent format
+            }
+          },
+          expected: {
+            dataLength: 1,
+            tagsTotal: 3,
+            tagsFiltered: 2
+          }
+        }
+      ]
+
+      test.each(testCases)(
+        '$name',
+        async ({ model, queryConfig, expected }) => {
+          const result = await knexTools.buildQuery(db, model, queryConfig)
+
+          // Check data structure
+          expect(result).toHaveProperty('data')
+          expect(result.data).toHaveLength(expected.dataLength)
+
+          // Check relation metadata (now nested within each relation)
+          if (expected.userTotal !== undefined) {
+            expect(result.data[0].user).toHaveProperty('metadata')
+            expect(result.data[0].user.metadata.counts.total).toBe(
+              expected.userTotal
+            )
+          }
+
+          if (expected.foldersFiltered !== undefined) {
+            expect(result.data[0].folders).toHaveProperty('metadata')
+            expect(result.data[0].folders.metadata.counts.filtered).toBe(
+              expected.foldersFiltered
+            )
+          }
+
+          if (expected.tagsTotal !== undefined) {
+            expect(result.data[0].tags).toHaveProperty('metadata')
+            expect(result.data[0].tags.metadata.counts.total).toBe(
+              expected.tagsTotal
+            )
+          }
+
+          if (expected.tagsFiltered !== undefined) {
+            expect(result.data[0].tags).toHaveProperty('metadata')
+            expect(result.data[0].tags.metadata.counts.filtered).toBe(
+              expected.tagsFiltered
+            )
           }
         }
       )
