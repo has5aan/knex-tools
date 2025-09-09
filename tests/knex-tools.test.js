@@ -524,7 +524,7 @@ describe('knexTools', () => {
       describe('error handling', () => {
         const testCases = [
           {
-            name: '_exists throws error when relations not provided',
+            name: 'applyWhereClauses throws error when _exists used without relations provided',
             setup: () => db('memo').select('*'),
             parameters: {
               where: {
@@ -537,7 +537,7 @@ describe('knexTools', () => {
               'Relations must be provided to use _exists functionality'
           },
           {
-            name: '_exists throws error when relation not found',
+            name: 'applyWhereClauses throws error when _exists relation not found',
             setup: () => db('memo').select('*'),
             parameters: {
               where: {
@@ -1352,7 +1352,7 @@ describe('knexTools', () => {
     describe('error handling', () => {
       const testCases = [
         {
-          name: 'throws error when relation not found in relations config',
+          name: 'processJoins throws error when relation not found in relations config',
           model: memoModel,
           parameters: {
             join: {
@@ -1362,7 +1362,7 @@ describe('knexTools', () => {
           expectedError: "Relation 'nonexistent' not found in relations config"
         },
         {
-          name: 'throws error when projection not found in model',
+          name: 'processJoins throws error when projection not found in model',
           model: memoModel,
           parameters: {
             join: {
@@ -1646,6 +1646,22 @@ describe('knexTools', () => {
             expect(result).toEqual(expected)
           }
         )
+
+        test('belongsTo relation validation is skipped when no records returned', async () => {
+          // This should not throw even though 'basic' projection doesn't include user_id
+          // because there are no records to validate
+          const result = await knexTools.buildQuery(db, memoModel, {
+            projection: 'basic', // doesn't include user_id
+            where: { id: 999 }, // non-existent record
+            each: {
+              user: { projection: 'short' }
+            }
+          })
+
+          expect(result).toEqual({
+            data: []
+          })
+        })
       })
 
       describe('hasMany relationships', () => {
@@ -1710,29 +1726,6 @@ describe('knexTools', () => {
             expect(result).toEqual(expected)
           }
         )
-
-        test('hasMany relation returns empty data array when no records exist', async () => {
-          const result = await knexTools.buildQuery(db, userModel, {
-            projection: 'short',
-            where: { id: 3 }, // Target Charlie who intentionally has no memos
-            each: {
-              memos: { projection: 'short' }
-            }
-          })
-
-          expect(result).toEqual({
-            data: [
-              {
-                id: 3,
-                name: 'Charlie',
-                email: 'charlie@example.com',
-                memos: {
-                  data: []
-                }
-              }
-            ]
-          })
-        })
       })
 
       describe('manyToMany relationships', () => {
@@ -1765,6 +1758,30 @@ describe('knexTools', () => {
                 }
               ]
             }
+          },
+          {
+            name: 'manyToMany relation returns empty data array when no junction records exist',
+            model: memoModel,
+            queryConfig: {
+              projection: 'short',
+              where: { id: 4 }, // Target the intentionally untagged memo
+              each: {
+                tags: { projection: 'short' }
+              }
+            },
+            expected: {
+              data: [
+                {
+                  id: 4,
+                  content: 'Untagged memo',
+                  user_id: 2,
+                  folder_id: 3,
+                  tags: {
+                    data: []
+                  }
+                }
+              ]
+            }
           }
         ]
 
@@ -1775,30 +1792,6 @@ describe('knexTools', () => {
             expect(result).toEqual(expected)
           }
         )
-
-        test('manyToMany relation returns empty data array when no junction records exist', async () => {
-          const result = await knexTools.buildQuery(db, memoModel, {
-            projection: 'short',
-            where: { id: 4 }, // Target the intentionally untagged memo
-            each: {
-              tags: { projection: 'short' }
-            }
-          })
-
-          expect(result).toEqual({
-            data: [
-              {
-                id: 4,
-                content: 'Untagged memo',
-                user_id: 2,
-                folder_id: 3,
-                tags: {
-                  data: []
-                }
-              }
-            ]
-          })
-        })
       })
     })
 
@@ -1947,7 +1940,7 @@ describe('knexTools', () => {
     describe('error handling', () => {
       const testCases = [
         {
-          name: 'error handling for invalid projection',
+          name: 'buildQuery throws error for invalid projection',
           model: memoModel,
           queryConfig: {
             projection: 'nonexistent'
@@ -1955,7 +1948,7 @@ describe('knexTools', () => {
           expectedError: "Projection 'nonexistent' not found in model"
         },
         {
-          name: 'error handling for invalid relation',
+          name: 'buildQuery throws error for invalid relation',
           model: memoModel,
           queryConfig: {
             projection: 'details',
@@ -1968,7 +1961,7 @@ describe('knexTools', () => {
           expectedError: "Relation 'nonexistent' not found in model"
         },
         {
-          name: 'error handling for invalid modifier',
+          name: 'buildQuery throws error for invalid modifier',
           model: memoModel,
           queryConfig: {
             projection: 'details',
@@ -1979,7 +1972,7 @@ describe('knexTools', () => {
           expectedError: "Modifier 'nonexistent' not found in model"
         },
         {
-          name: 'error handling for belongsTo relation without foreign key in projection',
+          name: 'buildQuery throws error for belongsTo relation without foreign key in projection',
           model: memoModel,
           queryConfig: {
             projection: 'basic', // basic projection doesn't include user_id
@@ -1994,7 +1987,7 @@ describe('knexTools', () => {
             "Cannot populate 'user' relation: projection must include 'user_id' field"
         },
         {
-          name: 'error handling for belongsTo relation without foreign key in projection (folder relation)',
+          name: 'buildQuery throws error for belongsTo relation without foreign key in projection (folder relation)',
           model: memoModel,
           queryConfig: {
             projection: 'basic', // basic projection doesn't include folder_id
@@ -2018,22 +2011,6 @@ describe('knexTools', () => {
           ).rejects.toThrow(expectedError)
         }
       )
-
-      test('belongsTo relation validation is skipped when no records returned', async () => {
-        // This should not throw even though 'basic' projection doesn't include user_id
-        // because there are no records to validate
-        const result = await knexTools.buildQuery(db, memoModel, {
-          projection: 'basic', // doesn't include user_id
-          where: { id: 999 }, // non-existent record
-          each: {
-            user: { projection: 'short' }
-          }
-        })
-
-        expect(result).toEqual({
-          data: []
-        })
-      })
     })
 
     describe('modifiers', () => {
