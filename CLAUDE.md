@@ -80,11 +80,11 @@ const result = await buildQuery(knex, userModel, {
 // Query with metadata counts
 const result = await buildQuery(knex, userModel, {
   projection: 'details',
-  includeCounts: true
+  metadata: { counts: { total: true, filtered: true } }
 })
 // Returns: {
 //   data: [{ id: 1, name: 'John', ... }],
-//   metadata: { total: 100, filtered: 25 }
+//   metadata: { counts: { total: 100, filtered: 25 } }
 // }
 ```
 
@@ -96,10 +96,10 @@ Relations also follow the same structure when populated:
 // User with folders relation
 const result = await buildQuery(knex, userModel, {
   projection: 'details',
-  relations: {
+  each: {
     folders: {
       projection: 'short',
-      includeCounts: true
+      metadata: { counts: { total: true, filtered: true } }
     }
   }
 })
@@ -109,7 +109,7 @@ const result = await buildQuery(knex, userModel, {
 //     id: 1, name: 'John', email: 'john@example.com',
 //     folders: {
 //       data: [{ id: 1, name: 'Work', user_id: 1 }],
-//       metadata: { total: 5, filtered: 3 }
+//       metadata: { counts: { total: 5, filtered: 3 } }
 //     }
 //   }]
 // }

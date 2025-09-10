@@ -9,6 +9,7 @@ Documentation for all knex-tools functions and their parameters.
   - [applyWhereClauses](#applywhereclauses)
   - [applySortingClauses](#applysortingclauses)
   - [applyPagingClauses](#applypagingclauses)
+  - [applyJoinConditions](#applyjoinconditions)
   - [processJoins](#processjoins)
   - [buildMakeTransaction](#buildmaketransaction)
 - [Operators Reference](#operators-reference)
@@ -36,15 +37,15 @@ buildQuery(knexInstance, modelObject, queryConfig)
 
 #### Query Configuration
 
-| Property     | Type     | Description               | Example                                 |
-| ------------ | -------- | ------------------------- | --------------------------------------- |
-| `projection` | `string` | Projection key from model | `'details'`                             |
-| `where`      | `Object` | Filtering conditions      | `{ age: { gte: 18 } }`                  |
-| `orderBy`    | `Array`  | Sorting configuration     | `[{ field: 'name', direction: 'asc' }]` |
-| `take`       | `number` | Limit results             | `10`                                    |
-| `skip`       | `number` | Offset results            | `20`                                    |
-| `each`       | `Object` | Nested relation loading   | `{ posts: { projection: 'summary' } }`  |
-| `modifiers`  | `Object` | Apply named modifiers     | `{ forRole: { role: 'admin' } }`        |
+| Property     | Type     | Description               | Example                                |
+| ------------ | -------- | ------------------------- | -------------------------------------- |
+| `projection` | `string` | Projection key from model | `'details'`                            |
+| `where`      | `Object` | Filtering conditions      | `{ age: { gte: 18 } }`                 |
+| `orderBy`    | `Object` | Sorting configuration     | `{ name: 'asc', created_at: 'desc' }`  |
+| `take`       | `number` | Limit results             | `10`                                   |
+| `skip`       | `number` | Offset results            | `20`                                   |
+| `each`       | `Object` | Nested relation loading   | `{ posts: { projection: 'summary' } }` |
+| `modifiers`  | `Object` | Apply named modifiers     | `{ forRole: { role: 'admin' } }`       |
 
 #### Examples
 
@@ -54,7 +55,7 @@ buildQuery(knexInstance, modelObject, queryConfig)
 const users = await buildQuery(knex, userModel, {
   projection: 'details',
   where: { active: true },
-  orderBy: [{ field: 'created_at', direction: 'desc' }],
+  orderBy: { created_at: 'desc' },
   take: 10
 })
 ```
@@ -71,7 +72,7 @@ const posts = await buildQuery(knex, postModel, {
     },
     comments: {
       projection: 'summary',
-      orderBy: [{ field: 'created_at', direction: 'desc' }],
+      orderBy: { created_at: 'desc' },
       take: 5
     }
   }
@@ -189,25 +190,31 @@ applySortingClauses(query, table, criteria, defaultSortOptions)
 | -------------------- | ------------------- | -------------------------------------- |
 | `query`              | `Knex.QueryBuilder` | Knex query to modify                   |
 | `table`              | `string`            | Table alias for field prefixing        |
-| `criteria`           | `Array`             | Array of sort configurations           |
+| `criteria`           | `Object`            | Object of field-direction pairs        |
 | `defaultSortOptions` | `Object`            | Default sort when no criteria provided |
 
-#### Sort Configuration
+#### Criteria Format
 
-| Property    | Type     | Description            | Values              |
-| ----------- | -------- | ---------------------- | ------------------- |
-| `field`     | `string` | Column name to sort by | Any table column    |
-| `direction` | `string` | Sort direction         | `'asc'` or `'desc'` |
+Object where keys are field names and values are sort directions:
+
+```javascript
+{
+  fieldName: 'asc' | 'desc',
+  // Multiple fields supported
+  role: 'asc',
+  created_at: 'desc'
+}
+```
 
 #### Examples
 
 **Basic Sorting**
 
 ```javascript
-applySortingClauses(query, 'u', [
-  { field: 'role', direction: 'asc' },
-  { field: 'created_at', direction: 'desc' }
-])
+applySortingClauses(query, 'u', {
+  role: 'asc',
+  created_at: 'desc'
+})
 ```
 
 **With Default Fallback**
@@ -262,6 +269,37 @@ const pageSize = 10
 applyPagingClauses(query, {
   skip: (page - 1) * pageSize,
   take: pageSize
+})
+```
+
+---
+
+### applyJoinConditions
+
+**Apply filtering conditions to JOIN clauses.**
+
+```javascript
+applyJoinConditions(joinQuery, table, conditions)
+```
+
+#### Parameters
+
+| Parameter    | Type     | Description                                 |
+| ------------ | -------- | ------------------------------------------- |
+| `joinQuery`  | `Object` | Knex join builder instance                  |
+| `table`      | `string` | Table alias to apply conditions to          |
+| `conditions` | `Object` | Filtering conditions (same format as where) |
+
+#### Examples
+
+```javascript
+// Used internally by processJoins for JOIN-time filtering
+const joinQuery = query.leftJoin('posts as p', function () {
+  this.on('u.id', 'p.user_id')
+  applyJoinConditions(this, 'p', {
+    published: true,
+    created_at: { gte: '2024-01-01' }
+  })
 })
 ```
 
@@ -467,21 +505,21 @@ const userModel = {
 
   // Projections - functions that return column arrays (REQUIRED for buildQuery)
   projections: {
-    details: (knexInstance, alias, relationName = null) => [
+    details: (knexInstanceOrQuery, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       `${alias}.email`,
       `${alias}.role`,
       `${alias}.created_at`
     ],
-    summary: (knexInstance, alias, relationName = null) => [
+    summary: (knexInstanceOrQuery, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`
     ],
-    withStats: (knexInstance, alias, relationName = null) => [
+    withStats: (knexInstanceOrQuery, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
-      knexInstance.raw(`COUNT(posts.id) as post_count`)
+      knexInstanceOrQuery.raw(`COUNT(posts.id) as post_count`)
     ]
   },
 
@@ -507,6 +545,7 @@ const userModel = {
       type: 'manyToMany',
       model: 'tag',
       table: 'tags',
+      primaryKey: 'id',
       through: {
         table: 'user_tags',
         alias: 'ut', // Junction table alias (required)

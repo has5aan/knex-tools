@@ -30,7 +30,7 @@ const users = await buildQuery(knex, userModel, {
       where: { published: true }
     }
   },
-  orderBy: [{ field: 'created_at', direction: 'desc' }],
+  orderBy: { created_at: 'desc' },
   take: 10
 })
 ```
@@ -76,7 +76,7 @@ const posts = await buildQuery(knex, postModel, {
     author: { projection: 'profile' },
     comments: {
       projection: 'details',
-      orderBy: [{ field: 'created_at', direction: 'desc' }],
+      orderBy: { created_at: 'desc' },
       take: 5
     },
     tags: { projection: 'name' }
@@ -114,13 +114,13 @@ const userModel = {
 
   // Function-based projections with alias support (REQUIRED for buildQuery)
   projections: {
-    details: (knexInstance, alias, relationName = null) => [
+    details: (knexInstanceOrQuery, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       `${alias}.email`,
       `${alias}.role`
     ],
-    summary: (knexInstance, alias, relationName = null) => [
+    summary: (knexInstanceOrQuery, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`
     ]
@@ -131,12 +131,16 @@ const userModel = {
     posts: {
       type: 'hasMany',
       model: 'post',
+      table: 'posts',
       foreignKey: 'user_id',
+      primaryKey: 'id',
       modelDefinition: () => require('./post.model')
     },
     tags: {
       type: 'manyToMany',
       model: 'tag',
+      table: 'tags',
+      primaryKey: 'id',
       through: {
         table: 'user_tags',
         alias: 'ut', // Junction table alias (required)
@@ -204,10 +208,10 @@ applyWhereClauses(
 )
 
 // Multi-field sorting
-applySortingClauses(query, 'u', [
-  { field: 'role', direction: 'asc' },
-  { field: 'created_at', direction: 'desc' }
-])
+applySortingClauses(query, 'u', {
+  role: 'asc',
+  created_at: 'desc'
+})
 ```
 
 ## 🔧 API
@@ -218,6 +222,7 @@ applySortingClauses(query, 'u', [
 | `applyWhereClauses`    | Filtering                   | Rich search functionality |
 | `applySortingClauses`  | Multi-field sorting         | Ordered results           |
 | `applyPagingClauses`   | Pagination                  | Large dataset handling    |
+| `applyJoinConditions`  | JOIN conditions             | Complex JOIN logic        |
 | `processJoins`         | JOINs                       | Report generation         |
 | `buildMakeTransaction` | Transaction management      | Data consistency          |
 
@@ -225,9 +230,6 @@ applySortingClauses(query, 'u', [
 
 - 📖 **[API Reference](docs/API_REFERENCE.md)** - Function documentation
 - 🏗️ **[Models Guide](docs/MODELS_GUIDE.md)** - Model definitions and patterns
-- 💡 **[Examples](docs/EXAMPLES.md)** - Real-world use cases
-- 🚀 **[Features](docs/ADVANCED_FEATURES.md)** - Extended functionality
-- 🔄 **[Migration Guide](docs/MIGRATION_GUIDE.md)** - From other ORMs
 
 ## 🏢 Features
 

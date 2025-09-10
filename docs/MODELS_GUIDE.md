@@ -26,14 +26,14 @@ const userModel = {
 
   // 2. Projections - REQUIRED for buildQuery
   projections: {
-    details: (knexInstance, alias, relationName = null) => [...],
-    summary: (knexInstance, alias, relationName = null) => [...]
+    details: (knexInstanceOrQuery, alias, relationName = null) => [...],
+    summary: (knexInstanceOrQuery, alias, relationName = null) => [...]
   },
 
   // 3. Relations - For data fetching and exists clause filtering
   relations: {
-    posts: { type: 'hasMany', ... },
-    profile: { type: 'belongsTo', ... }
+    posts: { type: 'hasMany', table: 'posts', foreignKey: 'user_id', primaryKey: 'id', ... },
+    profile: { type: 'belongsTo', table: 'profiles', foreignKey: 'profile_id', primaryKey: 'id', ... }
   },
 
   // 4. Modifiers - Reusable query logic
@@ -83,10 +83,10 @@ const userModel = {
 **Projection Function Signature:**
 
 ```javascript
-;(knexInstance, alias, relationName = null) => [...columns]
+;(knexInstanceOrQuery, alias, relationName = null) => [...columns]
 ```
 
-- **knexInstance**: Knex instance for raw queries and database operations
+- **knexInstanceOrQuery**: Knex instance or query builder for raw queries and database operations
 - **alias**: Table alias for column references (e.g., 'u' for users table)
 - **relationName**: Optional relation name for column prefixing in JOINs
 
@@ -97,13 +97,13 @@ const userModel = {
 ```javascript
 projections: {
   // Simple column selection
-  summary: (knexInstance, alias, relationName = null) => [
+  summary: (knexInstanceOrQuery, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`
   ],
 
   // Full details
-  details: (knexInstance, alias, relationName = null) => [
+  details: (knexInstanceOrQuery, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`,
     `${alias}.email`,
@@ -117,17 +117,17 @@ projections: {
 
 ```javascript
 projections: {
-  withStats: (knexInstance, alias, relationName = null) => [
+  withStats: (knexInstanceOrQuery, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`,
-    knexInstance.raw(`COUNT(posts.id) as post_count`),
-    knexInstance.raw(`MAX(posts.created_at) as last_post_date`)
+    knexInstanceOrQuery.raw(`COUNT(posts.id) as post_count`),
+    knexInstanceOrQuery.raw(`MAX(posts.created_at) as last_post_date`)
   ],
 
-  computed: (knexInstance, alias, relationName = null) => [
+  computed: (knexInstanceOrQuery, alias, relationName = null) => [
     `${alias}.id`,
     `${alias}.name`,
-    knexInstance.raw(`
+    knexInstanceOrQuery.raw(`
       CASE
         WHEN ${alias}.role = 'admin' THEN 'Administrator'
         WHEN ${alias}.role = 'user' THEN 'Regular User'
@@ -142,7 +142,7 @@ projections: {
 
 ```javascript
 projections: {
-  forRole: (knexInstance, alias, relationName = null, { role }) => {
+  forRole: (knexInstanceOrQuery, alias, relationName = null, { role }) => {
     const base = [`${alias}.id`, `${alias}.name`]
 
     if (role === 'admin') {
@@ -150,7 +150,7 @@ projections: {
         ...base,
         `${alias}.email`,
         `${alias}.internal_notes`,
-        knexInstance.raw(`COUNT(posts.id) as managed_posts`)
+        knexInstanceOrQuery.raw(`COUNT(posts.id) as managed_posts`)
       ]
     }
 
