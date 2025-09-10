@@ -687,7 +687,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { equals: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` = ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` = ?',
             bindings: [1]
           }
         },
@@ -697,7 +697,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { not: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` != ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` != ?',
             bindings: [1]
           }
         },
@@ -707,7 +707,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { gt: 0 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` > ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` > ?',
             bindings: [0]
           }
         },
@@ -717,7 +717,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { gte: 0 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` >= ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` >= ?',
             bindings: [0]
           }
         },
@@ -727,7 +727,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { lt: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` < ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` < ?',
             bindings: [1]
           }
         },
@@ -737,7 +737,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { lte: 1 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` <= ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` <= ?',
             bindings: [1]
           }
         },
@@ -747,7 +747,7 @@ describe('knexTools', () => {
             joinConditions: { name: { contains: 'Test' } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`name` like ?',
+            sql: 'select * from `folder` left join `user` on `user`.`name` like ?',
             bindings: ['%Test%']
           }
         },
@@ -757,7 +757,7 @@ describe('knexTools', () => {
             joinConditions: { name: { startsWith: 'Test' } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`name` like ?',
+            sql: 'select * from `folder` left join `user` on `user`.`name` like ?',
             bindings: ['Test%']
           }
         },
@@ -767,7 +767,7 @@ describe('knexTools', () => {
             joinConditions: { name: { endsWith: 'Test' } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`name` like ?',
+            sql: 'select * from `folder` left join `user` on `user`.`name` like ?',
             bindings: ['%Test']
           }
         },
@@ -777,7 +777,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { in: [1, 2] } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` in (?, ?)',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` in (?, ?)',
             bindings: [1, 2]
           }
         },
@@ -787,7 +787,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { notIn: [1, 2] } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` not in (?, ?)',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` not in (?, ?)',
             bindings: [1, 2]
           }
         },
@@ -797,7 +797,7 @@ describe('knexTools', () => {
             joinConditions: { deleted_at: { isNull: true } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`deleted_at` is null',
+            sql: 'select * from `folder` left join `user` on `user`.`deleted_at` is null',
             bindings: []
           }
         },
@@ -807,7 +807,7 @@ describe('knexTools', () => {
             joinConditions: { email: { isNotNull: true } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`email` is not null',
+            sql: 'select * from `folder` left join `user` on `user`.`email` is not null',
             bindings: []
           }
         },
@@ -817,7 +817,7 @@ describe('knexTools', () => {
             joinConditions: { deleted_at: { not: null } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`deleted_at` is not null',
+            sql: 'select * from `folder` left join `user` on `user`.`deleted_at` is not null',
             bindings: []
           }
         },
@@ -827,7 +827,7 @@ describe('knexTools', () => {
             joinConditions: { middle_name: null }
           },
           expected: {
-            sql: 'left join `user` on `user`.`middle_name` is null',
+            sql: 'select * from `folder` left join `user` on `user`.`middle_name` is null',
             bindings: []
           }
         },
@@ -837,7 +837,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: 1 }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` = ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` = ?',
             bindings: [1]
           }
         },
@@ -847,7 +847,7 @@ describe('knexTools', () => {
             joinConditions: { user_id: { gt: 0, not: 2 } }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` > ? and `user`.`user_id` != ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` > ? and `user`.`user_id` != ?',
             bindings: [0, 2]
           }
         },
@@ -859,7 +859,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user`',
+            sql: 'select * from `folder` left join `user`',
             bindings: []
           }
         },
@@ -871,7 +871,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on `user`.`user_id` = ?',
+            sql: 'select * from `folder` left join `user` on `user`.`user_id` = ?',
             bindings: [1]
           }
         }
@@ -882,7 +882,7 @@ describe('knexTools', () => {
         query.leftJoin('user', function () {
           knexTools.applyJoinConditions(this, 'user', parameters.joinConditions)
         })
-        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().sql).toBe(expected.sql)
         expect(query.toSQL().bindings).toEqual(expected.bindings)
       })
     })
@@ -901,7 +901,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = ?) and (`user`.`verified` = ?) and (`user`.`role` != ?)',
+            sql: 'select * from `folder` left join `user` on (`user`.`active` = ?) and (`user`.`verified` = ?) and (`user`.`role` != ?)',
             bindings: [true, true, 'banned']
           }
         },
@@ -913,7 +913,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`role` = ?) or (`user`.`premium` = ?)',
+            sql: 'select * from `folder` left join `user` on (`user`.`role` = ?) or (`user`.`premium` = ?)',
             bindings: ['admin', true]
           }
         },
@@ -935,7 +935,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = ?) and ((`user`.`role` = ?) or ((`user`.`premium` = ?) and (`user`.`verified` = ?)))',
+            sql: 'select * from `folder` left join `user` on (`user`.`active` = ?) and ((`user`.`role` = ?) or ((`user`.`premium` = ?) and (`user`.`verified` = ?)))',
             bindings: [true, 'admin', true, true]
           }
         },
@@ -951,7 +951,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = ?) and (`user`.`role` = ?)',
+            sql: 'select * from `folder` left join `user` on (`user`.`active` = ?) and (`user`.`role` = ?)',
             bindings: [true, 'admin']
           }
         },
@@ -967,7 +967,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = ?) or (`user`.`role` = ?)',
+            sql: 'select * from `folder` left join `user` on (`user`.`active` = ?) or (`user`.`role` = ?)',
             bindings: [true, 'admin']
           }
         },
@@ -979,7 +979,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = ?) and (`user`.`role` = ?)',
+            sql: 'select * from `folder` left join `user` on (`user`.`active` = ?) and (`user`.`role` = ?)',
             bindings: [true, 'admin']
           }
         },
@@ -991,7 +991,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user` on (`user`.`active` = ?) or (`user`.`role` = ?)',
+            sql: 'select * from `folder` left join `user` on (`user`.`active` = ?) or (`user`.`role` = ?)',
             bindings: [true, 'admin']
           }
         },
@@ -1003,7 +1003,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user`',
+            sql: 'select * from `folder` left join `user`',
             bindings: []
           }
         },
@@ -1015,7 +1015,7 @@ describe('knexTools', () => {
             }
           },
           expected: {
-            sql: 'left join `user`',
+            sql: 'select * from `folder` left join `user`',
             bindings: []
           }
         }
@@ -1026,7 +1026,7 @@ describe('knexTools', () => {
         query.leftJoin('user', function () {
           knexTools.applyJoinConditions(this, 'user', parameters.joinConditions)
         })
-        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().sql).toBe(expected.sql)
         expect(query.toSQL().bindings).toEqual(expected.bindings)
       })
     })

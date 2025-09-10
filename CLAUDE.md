@@ -29,7 +29,7 @@ This is a Knex.js utility library that provides query building enhancements. The
 
 ### Core Functions
 
-- `buildQuery(knexInstance, modelObject, queryConfig)` - GraphQL-style data fetching with nested relations and filtering
+- `buildQuery(knexInstance, modelObject, queryConfig)` - GraphQL-style data fetching with nested relations and filtering. Returns structured results with optional metadata counts
 - `applyWhereClauses(query, table, criteria, relations)` - Filtering with logical operators (AND, OR, NOT) and rich comparison operators (equals, not, gt, gte, lt, lte, contains, startsWith, endsWith, in, notIn, isNull, isNotNull, hasAll)
 - `applyPagingClauses(query, criteria)` - Pagination using skip/take parameters
 - `applySortingClauses(query, table, criteria, defaultSortOptions)` - Multi-field sorting with defaults
@@ -53,3 +53,64 @@ Tests use in-memory SQLite database created in `tests/setup.js`. Each test gets 
 - ESLint config enforces curly braces and 1tbs brace style
 - Prettier config: no semicolons, single quotes, no arrow parens, 2-space tabs, no trailing commas
 - Node.js >= 14 and Knex.js >= 3.0.0 peer dependency
+
+## buildQuery Result Structure
+
+The `buildQuery` function returns results in a consistent structure:
+
+```javascript
+{
+  data: [...], // Array of query results
+  metadata: {  // Optional, included when queryConfig.includeCounts = true
+    total: number,    // Total records without filters
+    filtered: number  // Records matching filter criteria
+  }
+}
+```
+
+### Basic Usage
+
+```javascript
+// Simple query without counts
+const result = await buildQuery(knex, userModel, {
+  projection: 'details'
+})
+// Returns: { data: [{ id: 1, name: 'John', email: 'john@example.com', ... }] }
+
+// Query with metadata counts
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  includeCounts: true
+})
+// Returns: {
+//   data: [{ id: 1, name: 'John', ... }],
+//   metadata: { total: 100, filtered: 25 }
+// }
+```
+
+### Relation Metadata
+
+Relations also follow the same structure when populated:
+
+```javascript
+// User with folders relation
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  relations: {
+    folders: {
+      projection: 'short',
+      includeCounts: true
+    }
+  }
+})
+// Returns:
+// {
+//   data: [{
+//     id: 1, name: 'John', email: 'john@example.com',
+//     folders: {
+//       data: [{ id: 1, name: 'Work', user_id: 1 }],
+//       metadata: { total: 5, filtered: 3 }
+//     }
+//   }]
+// }
+```
