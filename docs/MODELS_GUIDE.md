@@ -162,7 +162,7 @@ projections: {
 ### Projection Best Practices
 
 1. **Always use alias parameter**: `${alias}.column` instead of hardcoded table names
-2. **Name projections by use case**: `summary`, `details`, `forApi`, `forReport`
+2. **Name projections by use case**: `summary`, `details`, `forApi`, `analytics`
 3. **Use knexInstance for raw SQL**: Access to `knex.raw()` and other methods
 4. **Use relationName for column aliasing**: Third parameter enables column prefixing in joins
 5. **Keep projections focused**: Each projection should serve a specific purpose
