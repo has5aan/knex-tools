@@ -18,7 +18,8 @@ module.exports = {
       return [
         `${alias}.id as ${prefix}id`,
         `${alias}.name as ${prefix}name`,
-        `${alias}.user_id as ${prefix}user_id`
+        `${alias}.user_id as ${prefix}user_id`,
+        `${alias}.parent_id as ${prefix}parent_id`
       ]
     }
   },

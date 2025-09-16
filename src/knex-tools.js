@@ -161,26 +161,6 @@ function applyOperator(query, table, field, operator, value) {
     case 'isNotNull':
       query = query.whereNotNull(`${table}.${field}`)
       break
-    case 'hasAll': {
-      const values = Array.isArray(value) ? value : [value]
-      const cteName = `${field}_hasall_values`
-
-      // Create CTE SQL manually to ensure proper UNION construction
-      const cteSelects = values.map(() => 'select ? as value').join(' union ')
-      const cteQuery = query.client.raw(cteSelects, values)
-
-      // Create CTE with field-specific name
-      query = query.with(cteName, cteQuery)
-
-      // Add EXISTS clause with COUNT
-      query = query.whereExists(function () {
-        this.select(1)
-          .from(cteName)
-          .whereRaw(`??.value = ??.??`, [cteName, table, field])
-          .havingRaw('COUNT(*) = ?', [values.length])
-      })
-      break
-    }
   }
 }
 
@@ -685,6 +665,17 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
   // Execute main query
   const records = await query
 
+  // Collect metadata if requested
+  let metadata = {}
+  if (queryConfig.metadata?.counts) {
+    metadata.counts = await collectCounts(
+      knexInstance,
+      modelObject,
+      queryConfig.metadata.counts,
+      queryConfig.where
+    )
+  }
+
   // Process 'each' relations for every record
   if (queryConfig.each && records.length > 0) {
     await populateEachRelations(
@@ -695,7 +686,15 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
     )
   }
 
-  return records
+  // Always return object format for consistency
+  const result = { data: records }
+
+  // Only add metadata key if there is metadata
+  if (Object.keys(metadata).length > 0) {
+    result.metadata = metadata
+  }
+
+  return result
 }
 
 async function populateEachRelations(
@@ -714,7 +713,7 @@ async function populateEachRelations(
 
     // Handle different relation types
     switch (relation.type) {
-      case 'belongsTo':
+      case 'belongsTo': {
         await populateBelongsToRelation(
           knexInstance,
           records,
@@ -724,7 +723,8 @@ async function populateEachRelations(
           relationQuery
         )
         break
-      case 'hasMany':
+      }
+      case 'hasMany': {
         await populateHasManyRelation(
           knexInstance,
           records,
@@ -734,7 +734,8 @@ async function populateEachRelations(
           relationQuery
         )
         break
-      case 'manyToMany':
+      }
+      case 'manyToMany': {
         await populateManyToManyRelation(
           knexInstance,
           records,
@@ -744,6 +745,7 @@ async function populateEachRelations(
           relationQuery
         )
         break
+      }
     }
   }
 }
@@ -756,6 +758,13 @@ async function populateBelongsToRelation(
   relationKey,
   relationQuery
 ) {
+  // Validate that foreign key is included in projection
+  if (records.length > 0 && !(relation.foreignKey in records[0])) {
+    throw new Error(
+      `Cannot populate '${relationKey}' relation: projection must include '${relation.foreignKey}' field`
+    )
+  }
+
   // Get unique foreign key values
   const foreignKeys = [
     ...new Set(
@@ -763,11 +772,15 @@ async function populateBelongsToRelation(
     )
   ]
   if (foreignKeys.length === 0) {
-    return
+    // No foreign keys, populate with null for consistency
+    records.forEach(record => {
+      record[relationKey] = null
+    })
+    return { metadata: null }
   }
 
   // Build query for related records
-  const relatedRecords = await buildQuery(knexInstance, relatedModel, {
+  const result = await buildQuery(knexInstance, relatedModel, {
     ...relationQuery,
     where: {
       ...relationQuery.where,
@@ -775,15 +788,32 @@ async function populateBelongsToRelation(
     }
   })
 
+  // Extract data and metadata
+  const relatedRecords = result.data || result
+  const metadata = result.metadata
+
   // Create lookup map
   const relatedMap = new Map(
     relatedRecords.map(record => [record[relation.primaryKey], record])
   )
 
-  // Attach related records to main records
+  // Attach related records to main records with consistent structure
   records.forEach(record => {
-    record[relationKey] = relatedMap.get(record[relation.foreignKey]) || null
+    const relatedRecord = relatedMap.get(record[relation.foreignKey])
+
+    if (relatedRecord) {
+      // Always use consistent structure: { data: record, metadata?: {...} }
+      const relationResult = { data: relatedRecord }
+      if (metadata) {
+        relationResult.metadata = metadata
+      }
+      record[relationKey] = relationResult
+    } else {
+      record[relationKey] = null
+    }
   })
+
+  return { metadata: null } // Don't propagate metadata up
 }
 
 async function populateHasManyRelation(
@@ -801,17 +831,25 @@ async function populateHasManyRelation(
     )
   ]
   if (primaryKeys.length === 0) {
+    // Populate all records with empty relation data to maintain consistency
+    records.forEach(record => {
+      record[relationKey] = { data: [] }
+    })
     return
   }
 
   // Build query for related records
-  const relatedRecords = await buildQuery(knexInstance, relatedModel, {
+  const result = await buildQuery(knexInstance, relatedModel, {
     ...relationQuery,
     where: {
       ...relationQuery.where,
       [relation.foreignKey]: { in: primaryKeys }
     }
   })
+
+  // Extract data and metadata
+  const relatedRecords = result.data || result
+  const metadata = result.metadata
 
   // Group related records by foreign key
   const relatedMap = new Map()
@@ -823,10 +861,19 @@ async function populateHasManyRelation(
     relatedMap.get(key).push(record)
   })
 
-  // Attach related records to main records
+  // Attach related records to main records with consistent structure
   records.forEach(record => {
-    record[relationKey] = relatedMap.get(record[relation.primaryKey]) || []
+    const relatedRecords = relatedMap.get(record[relation.primaryKey]) || []
+
+    // Always use consistent structure: { data: [...], metadata?: {...} }
+    const relationResult = { data: relatedRecords }
+    if (metadata) {
+      relationResult.metadata = metadata
+    }
+    record[relationKey] = relationResult
   })
+
+  return { metadata: null } // Don't propagate metadata up
 }
 
 async function populateManyToManyRelation(
@@ -857,17 +904,25 @@ async function populateManyToManyRelation(
     ...new Set(junctionRecords.map(record => record[relation.through.otherKey]))
   ]
   if (otherKeys.length === 0) {
-    return
+    // No related records, but still populate with empty array for consistency
+    records.forEach(record => {
+      record[relationKey] = { data: [] }
+    })
+    return { metadata: null }
   }
 
   // Build query for related records
-  const relatedRecords = await buildQuery(knexInstance, relatedModel, {
+  const result = await buildQuery(knexInstance, relatedModel, {
     ...relationQuery,
     where: {
       ...relationQuery.where,
       [relation.primaryKey || 'id']: { in: otherKeys }
     }
   })
+
+  // Extract data and metadata
+  const relatedRecords = result.data || result
+  const metadata = result.metadata
 
   // Create lookup map for related records
   const relatedMap = new Map(
@@ -884,13 +939,104 @@ async function populateManyToManyRelation(
     junctionMap.get(key).push(record[relation.through.otherKey])
   })
 
-  // Attach related records to main records
+  // Attach related records to main records with nested metadata structure
   records.forEach(record => {
     const otherKeys = junctionMap.get(record[relation.primaryKey || 'id']) || []
-    record[relationKey] = otherKeys
+    const relatedRecords = otherKeys
       .map(key => relatedMap.get(key))
       .filter(Boolean)
+
+    // Always use consistent structure: { data: [...], metadata?: {...} }
+    const relationResult = { data: relatedRecords }
+    if (metadata) {
+      relationResult.metadata = metadata
+    }
+    record[relationKey] = relationResult
   })
+
+  return { metadata: null } // Don't propagate metadata up
+}
+
+// Helper function to collect count metadata
+async function collectCounts(
+  knexInstance,
+  modelObject,
+  countConfig,
+  whereClause
+) {
+  const countPromises = []
+
+  // Basic total count
+  if (countConfig.total) {
+    countPromises.push(
+      getTotalCount(knexInstance, modelObject).then(count => ({ total: count }))
+    )
+  }
+
+  // Basic filtered count
+  if (countConfig.filtered && whereClause) {
+    countPromises.push(
+      getFilteredCount(knexInstance, modelObject, whereClause).then(count => ({
+        filtered: count
+      }))
+    )
+  }
+
+  // Modifier-based counts
+  if (countConfig.modifiers && modelObject.modifiers) {
+    Object.entries(countConfig.modifiers).forEach(([modifierName, params]) => {
+      const modifier = modelObject.modifiers[modifierName]
+      if (!modifier) {
+        throw new Error(`Modifier '${modifierName}' not found in model`)
+      }
+
+      countPromises.push(
+        getModifierCount(knexInstance, modelObject, modifier, params).then(
+          count => ({ [modifierName]: count })
+        )
+      )
+    })
+  }
+
+  // Execute all count queries in parallel
+  const countResults = await Promise.all(countPromises)
+  return Object.assign({}, ...countResults)
+}
+
+// Get total count
+async function getTotalCount(knexInstance, modelObject) {
+  const result = await knexInstance(modelObject.tableName)
+    .count('* as count')
+    .first()
+  return parseInt(result.count)
+}
+
+// Get filtered count
+async function getFilteredCount(knexInstance, modelObject, whereClause) {
+  const query = knexInstance(`${modelObject.tableName} as ${modelObject.alias}`)
+  applyWhereClauses(
+    query,
+    modelObject.alias,
+    { where: whereClause },
+    modelObject.relations
+  )
+  const result = await query.count('* as count').first()
+  return parseInt(result.count)
+}
+
+// Get modifier-based count
+async function getModifierCount(knexInstance, modelObject, modifier, params) {
+  const query = knexInstance(`${modelObject.tableName} as ${modelObject.alias}`)
+  modifier(query, knexInstance, modelObject.alias, params)
+
+  // If modifier didn't add count, add it
+  const sql = query.toSQL().sql.toLowerCase()
+  if (!sql.includes('count(')) {
+    query.count('* as count')
+  }
+
+  const result = await query.first()
+  return parseInt(result.count || result[Object.keys(result)[0]])
 }
 
 module.exports = {
