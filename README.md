@@ -46,7 +46,6 @@ where: {
   name: { contains: 'John' },          // Text search
   email: { endsWith: '@company.com' }, // Pattern matching
   role: { in: ['admin', 'manager'] },  // List queries
-  tags: { hasAll: ['urgent', 'important'] }, // Array contains all
   deletedAt: { isNull: true },         // Null checks
   _condition: user.canViewAll          // Dynamic conditions
 }

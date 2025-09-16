@@ -462,7 +462,6 @@ try {
 | -------- | --------------------------- | --------------------------------------------------- |
 | `AND`    | All conditions must be true | `{ AND: [{ age: { gte: 18 } }, { active: true }] }` |
 | `OR`     | Any condition must be true  | `{ OR: [{ role: 'admin' }, { role: 'owner' }] }`    |
-| `hasAll` | Array contains all values   | `{ tags: { hasAll: ['urgent', 'important'] } }`     |
 
 ### Special Operators
 

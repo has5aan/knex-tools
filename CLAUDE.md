@@ -30,7 +30,7 @@ This is a Knex.js utility library that provides query building enhancements. The
 ### Core Functions
 
 - `buildQuery(knexInstance, modelObject, queryConfig)` - GraphQL-style data fetching with nested relations and filtering. Returns structured results with optional metadata counts
-- `applyWhereClauses(query, table, criteria, relations)` - Filtering with logical operators (AND, OR, NOT) and rich comparison operators (equals, not, gt, gte, lt, lte, contains, startsWith, endsWith, in, notIn, isNull, isNotNull, hasAll)
+- `applyWhereClauses(query, table, criteria, relations)` - Filtering with logical operators (AND, OR, NOT) and rich comparison operators (equals, not, gt, gte, lt, lte, contains, startsWith, endsWith, in, notIn, isNull, isNotNull)
 - `applyPagingClauses(query, criteria)` - Pagination using skip/take parameters
 - `applySortingClauses(query, table, criteria, defaultSortOptions)` - Multi-field sorting with defaults
 - `processJoins(query, rootModel, joins, relations)` - JOIN operations with conditions and logical operators

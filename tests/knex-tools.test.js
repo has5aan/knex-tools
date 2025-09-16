@@ -267,34 +267,6 @@ describe('knexTools', () => {
           }
         },
         {
-          name: 'hasAll operator with single value',
-          parameters: {
-            criteria: {
-              where: {
-                tags: { hasAll: ['urgent'] }
-              }
-            }
-          },
-          expected: {
-            sql: 'with `tags_hasall_values` as (select ? as value) select * from `folder` where exists (select 1 from `tags_hasall_values` where `tags_hasall_values`.value = `folder`.`tags` having COUNT(*) = ?)',
-            bindings: ['urgent', 1]
-          }
-        },
-        {
-          name: 'hasAll operator with multiple values',
-          parameters: {
-            criteria: {
-              where: {
-                tags: { hasAll: ['urgent', 'priority'] }
-              }
-            }
-          },
-          expected: {
-            sql: 'with `tags_hasall_values` as (select ? as value union select ? as value) select * from `folder` where exists (select 1 from `tags_hasall_values` where `tags_hasall_values`.value = `folder`.`tags` having COUNT(*) = ?)',
-            bindings: ['urgent', 'priority', 2]
-          }
-        },
-        {
           name: 'AND logical operator with null values in where clauses',
           parameters: {
             criteria: {

@@ -161,26 +161,6 @@ function applyOperator(query, table, field, operator, value) {
     case 'isNotNull':
       query = query.whereNotNull(`${table}.${field}`)
       break
-    case 'hasAll': {
-      const values = Array.isArray(value) ? value : [value]
-      const cteName = `${field}_hasall_values`
-
-      // Create CTE SQL manually to ensure proper UNION construction
-      const cteSelects = values.map(() => 'select ? as value').join(' union ')
-      const cteQuery = query.client.raw(cteSelects, values)
-
-      // Create CTE with field-specific name
-      query = query.with(cteName, cteQuery)
-
-      // Add EXISTS clause with COUNT
-      query = query.whereExists(function () {
-        this.select(1)
-          .from(cteName)
-          .whereRaw(`??.value = ??.??`, [cteName, table, field])
-          .havingRaw('COUNT(*) = ?', [values.length])
-      })
-      break
-    }
   }
 }
 
