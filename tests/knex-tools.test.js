@@ -1914,7 +1914,9 @@ describe('knexTools', () => {
             memos: {
               projection: 'short',
               metadata: {
-                counts: ['total']
+                counts: {
+                  total: true
+                }
               }
             }
           }
@@ -1929,7 +1931,9 @@ describe('knexTools', () => {
               memos: {
                 data: [],
                 metadata: {
-                  counts: {}
+                  counts: {
+                    total: 5
+                  }
                 }
               }
             }

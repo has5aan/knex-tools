@@ -77,10 +77,15 @@ const result = await buildQuery(knex, userModel, {
 })
 // Returns: { data: [{ id: 1, name: 'John', email: 'john@example.com', ... }] }
 
-// Query with metadata counts
+// Query with metadata counts (object format required)
 const result = await buildQuery(knex, userModel, {
   projection: 'details',
-  metadata: { counts: { total: true, filtered: true } }
+  metadata: {
+    counts: {
+      total: true, // Include total count
+      filtered: true // Include filtered count
+    }
+  }
 })
 // Returns: {
 //   data: [{ id: 1, name: 'John', ... }],
@@ -99,7 +104,12 @@ const result = await buildQuery(knex, userModel, {
   each: {
     folders: {
       projection: 'short',
-      metadata: { counts: { total: true, filtered: true } }
+      metadata: {
+        counts: {
+          total: true,
+          filtered: true
+        }
+      }
     }
   }
 })

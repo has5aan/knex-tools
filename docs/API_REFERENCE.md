@@ -9,7 +9,6 @@ Documentation for all knex-tools functions and their parameters.
   - [applyWhereClauses](#applywhereclauses)
   - [applySortingClauses](#applysortingclauses)
   - [applyPagingClauses](#applypagingclauses)
-  - [applyJoinConditions](#applyjoinconditions)
   - [processJoins](#processjoins)
   - [buildMakeTransaction](#buildmaketransaction)
 - [Operators Reference](#operators-reference)
@@ -37,15 +36,16 @@ buildQuery(knexInstance, modelObject, queryConfig)
 
 #### Query Configuration
 
-| Property     | Type     | Description               | Example                                |
-| ------------ | -------- | ------------------------- | -------------------------------------- |
-| `projection` | `string` | Projection key from model | `'details'`                            |
-| `where`      | `Object` | Filtering conditions      | `{ age: { gte: 18 } }`                 |
-| `orderBy`    | `Object` | Sorting configuration     | `{ name: 'asc', created_at: 'desc' }`  |
-| `take`       | `number` | Limit results             | `10`                                   |
-| `skip`       | `number` | Offset results            | `20`                                   |
-| `each`       | `Object` | Nested relation loading   | `{ posts: { projection: 'summary' } }` |
-| `modifiers`  | `Object` | Apply named modifiers     | `{ forRole: { role: 'admin' } }`       |
+| Property     | Type     | Description               | Example                                       |
+| ------------ | -------- | ------------------------- | --------------------------------------------- |
+| `projection` | `string` | Projection key from model | `'details'`                                   |
+| `where`      | `Object` | Filtering conditions      | `{ age: { gte: 18 } }`                        |
+| `orderBy`    | `Object` | Sorting configuration     | `{ name: 'asc', created_at: 'desc' }`         |
+| `take`       | `number` | Limit results             | `10`                                          |
+| `skip`       | `number` | Offset results            | `20`                                          |
+| `each`       | `Object` | Nested relation loading   | `{ posts: { projection: 'summary' } }`        |
+| `modifiers`  | `Object` | Apply named modifiers     | `{ forRole: { role: 'admin' } }`              |
+| `metadata`   | `Object` | Include metadata counts   | `{ counts: { total: true, filtered: true } }` |
 
 #### Examples
 
@@ -89,6 +89,75 @@ const adminUsers = await buildQuery(knex, userModel, {
     active: {}
   }
 })
+```
+
+**With Metadata Counts**
+
+```javascript
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  where: { active: true },
+  metadata: {
+    counts: {
+      total: true, // Include total count without filters
+      filtered: true // Include count with filters applied
+    }
+  }
+})
+// Returns: {
+//   data: [{ id: 1, name: 'John', ... }],
+//   metadata: { counts: { total: 100, filtered: 25 } }
+// }
+```
+
+#### Metadata Configuration
+
+The `metadata.counts` parameter must be an **object** (not array) specifying which counts to include:
+
+```javascript
+metadata: {
+  counts: {
+    total: true,     // Include total count without filters
+    filtered: true   // Include count with filters applied
+  }
+}
+```
+
+**Important**: Only object format is supported. Array formats like `['total']` are not supported.
+
+#### Return Value
+
+buildQuery returns a structured result object:
+
+```javascript
+{
+  data: Array,      // Query results
+  metadata?: {      // Optional, included when metadata.counts specified
+    counts: {
+      total?: number,    // Total records without filters
+      filtered?: number  // Records matching filter criteria
+    }
+  }
+}
+```
+
+Relations also follow the same structure when populated with metadata:
+
+```javascript
+// User with folders relation and metadata
+{
+  data: [
+    {
+      id: 1,
+      name: 'John',
+      email: 'john@example.com',
+      folders: {
+        data: [{ id: 1, name: 'Work', user_id: 1 }],
+        metadata: { counts: { total: 5, filtered: 3 } }
+      }
+    }
+  ]
+}
 ```
 
 ---
@@ -269,37 +338,6 @@ const pageSize = 10
 applyPagingClauses(query, {
   skip: (page - 1) * pageSize,
   take: pageSize
-})
-```
-
----
-
-### applyJoinConditions
-
-**Apply filtering conditions to JOIN clauses.**
-
-```javascript
-applyJoinConditions(joinQuery, table, conditions)
-```
-
-#### Parameters
-
-| Parameter    | Type     | Description                                 |
-| ------------ | -------- | ------------------------------------------- |
-| `joinQuery`  | `Object` | Knex join builder instance                  |
-| `table`      | `string` | Table alias to apply conditions to          |
-| `conditions` | `Object` | Filtering conditions (same format as where) |
-
-#### Examples
-
-```javascript
-// Used internally by processJoins for JOIN-time filtering
-const joinQuery = query.leftJoin('posts as p', function () {
-  this.on('u.id', 'p.user_id')
-  applyJoinConditions(this, 'p', {
-    published: true,
-    created_at: { gte: '2024-01-01' }
-  })
 })
 ```
 
@@ -504,14 +542,14 @@ const userModel = {
 
   // Projections - functions that return column arrays (REQUIRED for buildQuery)
   projections: {
-    details: (knexInstanceOrQuery, alias, relationName = null) => [
+    details: (_, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       `${alias}.email`,
       `${alias}.role`,
       `${alias}.created_at`
     ],
-    summary: (knexInstanceOrQuery, alias, relationName = null) => [
+    summary: (_, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`
     ],
