@@ -16,8 +16,8 @@ npm install knex-tools
 const knex = require('knex')(config)
 const { buildQuery } = require('knex-tools')
 
-// GraphQL-style nested data fetching
-const users = await buildQuery(knex, userModel, {
+// GraphQL-style nested data fetching with metadata
+const result = await buildQuery(knex, userModel, {
   projection: 'details',
   where: {
     role: 'admin',
@@ -31,8 +31,13 @@ const users = await buildQuery(knex, userModel, {
     }
   },
   orderBy: { created_at: 'desc' },
-  take: 10
+  take: 10,
+  metadata: {
+    counts: { total: true, filtered: true }
+  }
 })
+
+// Result: { data: [...], metadata: { counts: { total: 500, filtered: 12 } } }
 ```
 
 ## 🔥 Why knex-tools?
@@ -81,6 +86,40 @@ const posts = await buildQuery(knex, postModel, {
     tags: { projection: 'name' }
   }
 })
+```
+
+### **📈 Metadata & Count Tracking**
+
+```javascript
+// Get counts alongside your data
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  where: { active: true },
+  metadata: {
+    counts: {
+      total: true, // Total users in database
+      filtered: true // Users matching where clause
+    }
+  },
+  each: {
+    posts: {
+      projection: 'summary',
+      metadata: { counts: { total: true } } // Also count user's posts
+    }
+  }
+})
+
+// Result structure:
+// {
+//   data: [{
+//     id: 1, name: 'John',
+//     posts: {
+//       data: [...],
+//       metadata: { counts: { total: 5 } }
+//     }
+//   }],
+//   metadata: { counts: { total: 1000, filtered: 25 } }
+// }
 ```
 
 ### **🏗️ Horizontal Table Partitioning**
@@ -217,11 +256,10 @@ applySortingClauses(query, 'u', {
 
 | Function               | Purpose                     | Use Case                  |
 | ---------------------- | --------------------------- | ------------------------- |
-| `buildQuery`           | GraphQL-style data fetching | Nested queries            |
+| `buildQuery`           | GraphQL-style data fetching | Nested queries & metadata |
 | `applyWhereClauses`    | Filtering                   | Rich search functionality |
 | `applySortingClauses`  | Multi-field sorting         | Ordered results           |
 | `applyPagingClauses`   | Pagination                  | Large dataset handling    |
-| `applyJoinConditions`  | JOIN conditions             | Complex JOIN logic        |
 | `processJoins`         | JOINs                       | Report generation         |
 | `buildMakeTransaction` | Transaction management      | Data consistency          |
 
