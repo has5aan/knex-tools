@@ -254,14 +254,14 @@ applySortingClauses(query, 'u', {
 
 ## 🔧 API
 
-| Function               | Purpose                     | Use Case                  |
-| ---------------------- | --------------------------- | ------------------------- |
-| `buildQuery`           | GraphQL-style data fetching | Nested queries & metadata |
-| `applyWhereClauses`    | Filtering                   | Rich search functionality |
-| `applySortingClauses`  | Multi-field sorting         | Ordered results           |
-| `applyPagingClauses`   | Pagination                  | Large dataset handling    |
-| `processJoins`         | JOINs                       | Report generation         |
-| `buildMakeTransaction` | Transaction management      | Data consistency          |
+| Function               | Purpose                         |
+| ---------------------- | ------------------------------- |
+| `buildQuery`           | GraphQL-style data fetching     |
+| `applyWhereClauses`    | Rich filtering with operators   |
+| `applySortingClauses`  | Multi-field sorting             |
+| `applyPagingClauses`   | Pagination with skip/take       |
+| `processJoins`         | JOIN operations with conditions |
+| `buildMakeTransaction` | Transaction management          |
 
 ## 📚 Documentation
 
@@ -284,27 +284,49 @@ where: {
 }
 ```
 
-### **Reporting**
+### **🔗 JOINs**
 
 ```javascript
-// JOIN scenarios with proper aliasing
-const report = await processJoins(
-  query,
+// Complex data fetching with JOINs
+const result = await processJoins(
+  knex('users as u').select(['u.*', 'p.title', 't.name as tag_name']),
   userModel,
   {
     posts: {
-      on: { published: true },
-      where: { created_at: { gte: startDate } }
+      type: 'enforce', // INNER JOIN - only users with posts
+      on: { published: true, status: 'approved' }
     },
     tags: {
-      joinType: 'leftJoin',
-      on: { active: true }
+      type: 'include', // LEFT JOIN - all users, with/without tags
+      on: { active: true, category: { not: 'private' } }
+    },
+    profile: {
+      on: { verified: true },
+      where: { updated_at: { gte: '2024-01-01' } } // Post-JOIN filtering
     }
   },
-  relations
+  userModel.relations
 )
-// Generated SQL: LEFT JOIN user_tags as ut ON u.id = ut.user_id
-//                LEFT JOIN tags as t ON ut.tag_id = t.id
+
+// Advanced: Nested JOINs for hierarchical data
+const nestedResult = await processJoins(
+  knex('posts as p').select('*'),
+  postModel,
+  {
+    author: {
+      join: {
+        department: {
+          // author.department relation
+          type: 'enforce',
+          on: { active: true }
+        }
+      }
+    }
+  },
+  postModel.relations
+)
+// SQL: INNER JOIN users as u ON p.author_id = u.id
+//      INNER JOIN departments as d ON u.department_id = d.id AND d.active = true
 ```
 
 ### **Performance Optimization**

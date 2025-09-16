@@ -345,7 +345,7 @@ applyPagingClauses(query, {
 
 ### processJoins
 
-**JOIN operations with conditions and logical operators.**
+**JOIN operations with conditions and logical operators for complex data fetching.**
 
 ```javascript
 processJoins(query, rootModel, joins, relations)
@@ -362,15 +362,53 @@ processJoins(query, rootModel, joins, relations)
 
 #### JOIN Configuration
 
-| Property   | Type     | Description                 | Default      |
-| ---------- | -------- | --------------------------- | ------------ |
-| `joinType` | `string` | Type of JOIN                | `'leftJoin'` |
-| `on`       | `Object` | JOIN conditions             | `{}`         |
-| `where`    | `Object` | Additional WHERE conditions | `{}`         |
+| Property | Type     | Description                                              | Default     |
+| -------- | -------- | -------------------------------------------------------- | ----------- |
+| `type`   | `string` | JOIN behavior: `'enforce'` (INNER) or `'include'` (LEFT) | `'include'` |
+| `on`     | `Object` | JOIN-time filtering conditions                           | `{}`        |
+| `where`  | `Object` | Post-JOIN WHERE conditions                               | `{}`        |
+| `join`   | `Object` | Nested JOINs on this relation                            | `{}`        |
+
+#### JOIN Types
+
+| Type        | SQL JOIN   | Use Case                               |
+| ----------- | ---------- | -------------------------------------- |
+| `'include'` | LEFT JOIN  | Include rows even if relation is null  |
+| `'enforce'` | INNER JOIN | Only include rows with valid relations |
+
+#### Supported Operators
+
+JOIN conditions support all the same operators as WHERE clauses:
+
+- **Comparison**: `equals`, `not`, `gt`, `gte`, `lt`, `lte`, `in`, `notIn`, `isNull`, `isNotNull`
+- **String**: `contains`, `startsWith`, `endsWith`
+- **Logical**: `AND`, `OR`
+- **Conditional**: `_condition` flags
 
 #### Examples
 
 **Basic JOINs**
+
+```javascript
+// Simple LEFT JOINs
+processJoins(
+  query,
+  userModel,
+  {
+    posts: true, // Simple LEFT JOIN
+    profile: {
+      // LEFT JOIN with conditions
+      on: { active: true }
+    }
+  },
+  userModel.relations
+)
+// Generated SQL:
+// LEFT JOIN posts as p ON u.id = p.user_id
+// LEFT JOIN profiles as pr ON u.id = pr.user_id AND pr.active = true
+```
+
+**INNER vs LEFT JOINs**
 
 ```javascript
 processJoins(
@@ -378,17 +416,22 @@ processJoins(
   userModel,
   {
     posts: {
+      type: 'enforce', // INNER JOIN - only users with posts
       on: { published: true }
     },
     profile: {
-      joinType: 'innerJoin'
+      type: 'include', // LEFT JOIN - all users (default)
+      on: { verified: true }
     }
   },
   userModel.relations
 )
+// Generated SQL:
+// INNER JOIN posts as p ON u.id = p.user_id AND p.published = true
+// LEFT JOIN profiles as pr ON u.id = pr.user_id AND pr.verified = true
 ```
 
-**JOIN Conditions**
+**Advanced JOIN Conditions**
 
 ```javascript
 processJoins(
@@ -398,24 +441,166 @@ processJoins(
     author: {
       on: {
         active: true,
-        role: { in: ['author', 'editor'] }
-      },
-      where: {
+        role: { in: ['author', 'editor'] },
         created_at: { gte: '2024-01-01' }
       }
     },
     tags: {
-      joinType: 'leftJoin',
+      type: 'include',
       on: {
-        active: true
+        AND: [{ active: true }, { category: { not: 'hidden' } }]
       }
     }
   },
   postModel.relations
 )
+```
+
+**ManyToMany JOINs**
+
+```javascript
+processJoins(
+  query,
+  userModel,
+  {
+    tags: {
+      type: 'enforce', // Only users with tags
+      on: {
+        active: true, // Tag must be active
+        type: { in: ['skill', 'interest'] }
+      }
+    }
+  },
+  userModel.relations
+)
 // Generated SQL for manyToMany:
-// LEFT JOIN post_tags as pt ON p.id = pt.post_id
-// LEFT JOIN tags as t ON pt.tag_id = t.id AND t.active = true
+// INNER JOIN user_tags as ut ON u.id = ut.user_id
+// INNER JOIN tags as t ON ut.tag_id = t.id AND t.active = true AND t.type IN ('skill', 'interest')
+```
+
+**JOIN vs WHERE Conditions**
+
+```javascript
+processJoins(
+  query,
+  postModel,
+  {
+    author: {
+      on: {
+        active: true // JOIN condition - affects JOIN behavior
+      },
+      where: {
+        last_login: { gte: '2024-01-01' } // WHERE condition - filters after JOIN
+      }
+    }
+  },
+  postModel.relations
+)
+// Generated SQL:
+// LEFT JOIN users as u ON p.user_id = u.id AND u.active = true
+// WHERE u.last_login >= '2024-01-01'
+```
+
+**Nested JOINs**
+
+```javascript
+processJoins(
+  query,
+  memoModel,
+  {
+    folder: {
+      join: {
+        parent: {
+          // folder.parent relation
+          on: { active: true }
+        },
+        owner: {
+          // folder.owner relation
+          type: 'enforce'
+        }
+      }
+    }
+  },
+  memoModel.relations
+)
+// Generated SQL:
+// LEFT JOIN folders as f ON m.folder_id = f.id
+// LEFT JOIN folders as fp ON f.parent_id = fp.id AND fp.active = true
+// INNER JOIN users as u ON f.user_id = u.id
+```
+
+**Conditional JOINs**
+
+```javascript
+const includeArchived = user.hasRole('admin')
+
+processJoins(
+  query,
+  postModel,
+  {
+    author: {
+      on: {
+        active: true,
+        archived: { equals: true, _condition: includeArchived }
+      }
+    }
+  },
+  postModel.relations
+)
+// If user is admin: JOIN includes archived authors
+// If user is not admin: archived condition is ignored
+```
+
+**Self-Referencing JOINs**
+
+```javascript
+processJoins(
+  query,
+  folderModel,
+  {
+    parent: {
+      // Self-reference: folder -> parent folder
+      on: { active: true }
+    },
+    children: {
+      // Self-reference: folder -> child folders
+      type: 'include',
+      on: { deleted_at: { isNull: true } }
+    }
+  },
+  folderModel.relations
+)
+// Generated SQL with proper aliasing:
+// LEFT JOIN folders as parent ON f.parent_id = parent.id AND parent.active = true
+// LEFT JOIN folders as children ON f.id = children.parent_id AND children.deleted_at IS NULL
+```
+
+#### Performance Considerations
+
+- **INNER JOINs** (`type: 'enforce'`) are typically faster than LEFT JOINs
+- **JOIN conditions** (`on`) are applied during the JOIN and can use indexes
+- **WHERE conditions** are applied after the JOIN and may be less efficient
+- **Nested JOINs** should be used carefully to avoid cartesian products
+
+#### Error Handling
+
+```javascript
+// Relation not found
+processJoins(query, userModel, { nonexistent: true }, relations)
+// Throws: "Relation 'nonexistent' not found in relations config"
+
+// Invalid projection in nested join
+processJoins(
+  query,
+  userModel,
+  {
+    posts: {
+      join: { author: { projection: 'invalid' } }
+    }
+  },
+  relations
+)
+// Throws: "Projection 'invalid' not found in model"
 ```
 
 ---
