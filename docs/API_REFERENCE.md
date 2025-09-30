@@ -690,9 +690,9 @@ try {
 
 ### Special Operators
 
-| Operator     | Description              | Example                                       |
-| ------------ | ------------------------ | --------------------------------------------- |
-| `_exists`    | Subquery existence check | `{ _exists: { posts: { published: true } } }` |
+| Operator     | Description              | Example                                                   |
+| ------------ | ------------------------ | --------------------------------------------------------- |
+| `_exists`    | Subquery existence check | `{ _exists: { posts: { published: true } } }`             |
 | `_condition` | Conditional application  | `{ role: { equals: 'admin', _condition: user.isOwner } }` |
 
 ### Default Behavior

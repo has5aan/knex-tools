@@ -339,7 +339,6 @@ const nestedResult = await processJoins(
 - **Optimized JOINs** - Minimal database round trips
 - **Alias management** - Prevents SQL conflicts
 
-
 ## 📄 License
 
 Apache 2.0 © [Hassaan](mailto:has5aan@outlook.com)
