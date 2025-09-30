@@ -52,7 +52,10 @@ where: {
   email: { endsWith: '@company.com' }, // Pattern matching
   role: { in: ['admin', 'manager'] },  // List queries
   deletedAt: { isNull: true },         // Null checks
-  _condition: user.canViewAll          // Dynamic conditions
+  department: {
+    in: ['IT', 'Sales'],
+    _condition: user.canViewAll        // Dynamic conditions
+  }
 }
 ```
 
@@ -336,14 +339,7 @@ const nestedResult = await processJoins(
 - **Optimized JOINs** - Minimal database round trips
 - **Alias management** - Prevents SQL conflicts
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
 ## 📄 License
 
 Apache 2.0 © [Hassaan](mailto:has5aan@outlook.com)
-
----
-
-**Built for applications that need flexible data access patterns.**
