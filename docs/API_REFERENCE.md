@@ -233,8 +233,10 @@ applyWhereClauses(
 ```javascript
 applyWhereClauses(query, 'u', {
   where: {
-    role: 'admin',
-    _condition: user.isAdmin, // Only apply if true
+    role: {
+      equals: 'admin',
+      _condition: user.isAdmin // Only apply if true
+    },
     department: {
       in: ['IT', 'Engineering'],
       _condition: user.canViewAllDepts
@@ -691,7 +693,7 @@ try {
 | Operator     | Description              | Example                                       |
 | ------------ | ------------------------ | --------------------------------------------- |
 | `_exists`    | Subquery existence check | `{ _exists: { posts: { published: true } } }` |
-| `_condition` | Conditional application  | `{ role: 'admin', _condition: user.isOwner }` |
+| `_condition` | Conditional application  | `{ role: { equals: 'admin', _condition: user.isOwner } }` |
 
 ### Default Behavior
 
