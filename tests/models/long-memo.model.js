@@ -6,13 +6,13 @@ module.exports = {
   alias: 'lm', // Different alias to distinguish from regular memo model
   modifiers: {
     // Reserved key - automatically applied by buildQuery
-    default: (query, knexInstance, tableAlias) => {
+    default: (query, tableAlias) => {
       // Filter for memos with long content (> 15 characters)
       query.whereRaw(`LENGTH(${tableAlias}.content) > ?`, [15])
     },
 
     // Manual modifiers for future use
-    forUser: (query, knexInstance, tableAlias, { userId }) => {
+    forUser: (query, tableAlias, { userId }) => {
       query.where(`${tableAlias}.user_id`, userId)
     }
   }

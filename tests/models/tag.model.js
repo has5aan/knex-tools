@@ -40,12 +40,12 @@ module.exports = {
   },
   modifiers: {
     // Reserved key - automatically applied by buildQuery
-    // default: (query, knexInstance, tableAlias) => {
+    // default: (query, tableAlias) => {
     //   query.where(`${tableAlias}.status`, 'active')
     // },
 
     // Manual modifiers for future use
-    forUser: (query, knexInstance, tableAlias, { userId }) => {
+    forUser: (query, tableAlias, { userId }) => {
       query
         .innerJoin('user as u', `${tableAlias}.user_id`, 'u.id')
         .where('u.id', userId)
