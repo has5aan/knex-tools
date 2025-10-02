@@ -6,17 +6,79 @@
 [![Node.js Version](https://img.shields.io/node/v/knex-tools.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-## 🚀 Quick Start
+## 📦 Installation
 
 ```bash
 npm install knex-tools
 ```
 
+## 🔥 Why knex-tools?
+
+### **🎯 Filtering**
+
+Rich filtering with the `applyWhereClauses` method. Model definition is **not required** for standard operators (see [Operators Reference](docs/API_REFERENCE.md#operators-reference)).
+
 ```javascript
-const knex = require('knex')(config)
+const { applyWhereClauses } = require('knex-tools')
+
+const query = knex('users as u').select('*')
+
+// Apply filtering - no model definition needed for standard operators
+applyWhereClauses(query, 'u', {
+  where: {
+    age: { gte: 21, lte: 65 }, // Range queries
+    name: { contains: 'John' }, // Text search
+    email: { endsWith: '@company.com' }, // Pattern matching
+    role: { in: ['admin', 'manager'] }, // List queries
+    deletedAt: { isNull: true }, // Null checks
+    department: {
+      in: ['IT', 'Sales'],
+      _condition: user.canViewAll // Dynamic conditions
+    }
+  }
+})
+
+const users = await query
+```
+
+### **🔒 Exists Clause Filtering**
+
+The `_exists` operator in `applyWhereClauses` enables row-level security. **Model definition with relations is required** for this operator.
+
+```javascript
+const { applyWhereClauses } = require('knex-tools')
+
+const query = knex('posts as p').select('*')
+
+// _exists requires model definition with relations
+applyWhereClauses(
+  query,
+  'p',
+  {
+    where: {
+      _exists: {
+        // Only show posts user can access
+        user: {
+          id: currentUser.id,
+          role: { in: ['admin', 'owner'] }
+        }
+      }
+    }
+  },
+  postModel.relations // Model relations required for _exists
+)
+
+const posts = await query
+```
+
+### **📊 GraphQL-Style Data Fetching**
+
+The `buildQuery` method enables efficient nested data loading without N+1 queries.
+
+```javascript
 const { buildQuery } = require('knex-tools')
 
-// GraphQL-style nested data fetching with metadata
+// Nested data fetching with metadata
 const result = await buildQuery(knex, userModel, {
   projection: 'details',
   where: {
@@ -37,46 +99,22 @@ const result = await buildQuery(knex, userModel, {
   }
 })
 
-// Result: { data: [...], metadata: { counts: { total: 500, filtered: 12 } } }
-```
+// Result:
+// {
+//   data: [
+//     {
+//       id: 1,
+//       name: 'John Doe',
+//       email: 'john@example.com',
+//       role: 'admin',
+//       posts: {
+//         data: [{ id: 10, title: 'Post Title', user_id: 1 }]
+//       }
+//     }
+//   ],
+//   metadata: { counts: { total: 500, filtered: 12 } }
+// }
 
-## 🔥 Why knex-tools?
-
-### **🎯 Filtering**
-
-```javascript
-// Rich operator system
-where: {
-  age: { gte: 21, lte: 65 },           // Range queries
-  name: { contains: 'John' },          // Text search
-  email: { endsWith: '@company.com' }, // Pattern matching
-  role: { in: ['admin', 'manager'] },  // List queries
-  deletedAt: { isNull: true },         // Null checks
-  department: {
-    in: ['IT', 'Sales'],
-    _condition: user.canViewAll        // Dynamic conditions
-  }
-}
-```
-
-### **🔒 Exists Clause Filtering**
-
-```javascript
-// Security with _exists operator
-where: {
-  _exists: {
-    // Only show posts user can access
-    user: {
-      id: currentUser.id,
-      role: { in: ['admin', 'owner'] }
-    }
-  }
-}
-```
-
-### **📊 GraphQL-Style Data Fetching**
-
-```javascript
 // Efficient nested loading (no N+1 queries)
 const posts = await buildQuery(knex, postModel, {
   each: {
@@ -94,6 +132,8 @@ const posts = await buildQuery(knex, postModel, {
 ### **📈 Metadata & Count Tracking**
 
 ```javascript
+const { buildQuery } = require('knex-tools')
+
 // Get counts alongside your data
 const result = await buildQuery(knex, userModel, {
   projection: 'details',
@@ -127,13 +167,18 @@ const result = await buildQuery(knex, userModel, {
 
 ### **🏗️ Horizontal Table Partitioning**
 
+Modifiers are reusable query functions defined in your model. The special `default` modifier is **automatically applied** by `buildQuery` to every query, making it perfect for creating logical data partitions (e.g., active-only views, tenant isolation).
+
 ```javascript
+const { buildQuery } = require('knex-tools')
+
 // Create logical views with default modifiers
 const activeUserModel = {
   ...userModel,
   modifiers: {
-    default: (query, knex, alias) => {
-      query.where(`${alias}.active`, true).where(`${alias}.deleted_at`, null)
+    // Special 'default' modifier - automatically applied to all queries
+    default: (query, alias) => {
+      query.where(`${alias}.active`, true).whereNull(`${alias}.deleted_at`)
     }
   }
 }
@@ -142,11 +187,51 @@ const activeUserModel = {
 const activeUsers = await buildQuery(knex, activeUserModel, {
   projection: 'details'
 })
+// Only returns active, non-deleted users automatically
 ```
 
 ## 📖 Core Concepts
 
-### **Models Define Structure**
+### **Query Building**
+
+```javascript
+const {
+  applyWhereClauses,
+  applySortingClauses,
+  applyPagingClauses
+} = require('knex-tools')
+
+const query = knex('users as u').select('*')
+
+// Rich filtering
+applyWhereClauses(
+  query,
+  'u',
+  {
+    where: {
+      age: { gte: 18 },
+      OR: [{ name: { startsWith: 'John' } }, { email: { contains: '@admin' } }]
+    }
+  },
+  userModel.relations
+)
+
+// Multi-field sorting
+applySortingClauses(query, 'u', {
+  role: 'asc',
+  created_at: 'desc'
+})
+
+// Pagination
+applyPagingClauses(query, {
+  skip: 20,
+  take: 10
+})
+
+const users = await query
+```
+
+### **Model Definition Structure**
 
 ```javascript
 const userModel = {
@@ -228,64 +313,7 @@ const prolificAdmins = await buildQuery(knex, userModel, {
 })
 ```
 
-### **Query Building**
-
-```javascript
-const { applyWhereClauses, applySortingClauses } = require('knex-tools')
-
-const query = knex('users as u').select('*')
-
-// Rich filtering
-applyWhereClauses(
-  query,
-  'u',
-  {
-    where: {
-      age: { gte: 18 },
-      OR: [{ name: { startsWith: 'John' } }, { email: { contains: '@admin' } }]
-    }
-  },
-  userModel.relations
-)
-
-// Multi-field sorting
-applySortingClauses(query, 'u', {
-  role: 'asc',
-  created_at: 'desc'
-})
-```
-
-## 🔧 API
-
-| Function               | Purpose                         |
-| ---------------------- | ------------------------------- |
-| `buildQuery`           | GraphQL-style data fetching     |
-| `applyWhereClauses`    | Rich filtering with operators   |
-| `applySortingClauses`  | Multi-field sorting             |
-| `applyPagingClauses`   | Pagination with skip/take       |
-| `processJoins`         | JOIN operations with conditions |
-| `buildMakeTransaction` | Transaction management          |
-
-## 📚 Documentation
-
-- 📖 **[API Reference](docs/API_REFERENCE.md)** - Function documentation
-- 🏗️ **[Models Guide](docs/MODELS_GUIDE.md)** - Model definitions and patterns
-
-## 🏢 Features
-
-### **Multi-tenant Architecture**
-
-```javascript
-// Tenant isolation with exists clause
-where: {
-  _exists: {
-    tenant: {
-      id: user.tenantId,
-      active: true
-    }
-  }
-}
-```
+## 🏢 Advanced Features
 
 ### **🔗 JOINs**
 
@@ -338,6 +366,22 @@ const nestedResult = await processJoins(
 - **Efficient projections** - Only fetch needed columns
 - **Optimized JOINs** - Minimal database round trips
 - **Alias management** - Prevents SQL conflicts
+
+## 🔧 API
+
+| Function               | Purpose                         |
+| ---------------------- | ------------------------------- |
+| `buildQuery`           | GraphQL-style data fetching     |
+| `applyWhereClauses`    | Rich filtering with operators   |
+| `applySortingClauses`  | Multi-field sorting             |
+| `applyPagingClauses`   | Pagination with skip/take       |
+| `processJoins`         | JOIN operations with conditions |
+| `buildMakeTransaction` | Transaction management          |
+
+## 📚 Documentation
+
+- 📖 **[API Reference](docs/API_REFERENCE.md)** - Function documentation
+- 🏗️ **[Models Guide](docs/MODELS_GUIDE.md)** - Model definitions and patterns
 
 ## 📄 License
 
