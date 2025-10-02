@@ -612,7 +612,7 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
 
   // Apply default modifier if present
   if (modelObject.modifiers && modelObject.modifiers.default) {
-    modelObject.modifiers.default(query, knexInstance, modelObject.alias)
+    modelObject.modifiers.default(query, modelObject.alias)
   }
 
   // Apply requested modifiers with parameters
@@ -623,7 +623,7 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
         throw new Error(`Modifier '${modifierName}' not found in model`)
       }
       // Apply modifier with destructured parameters
-      modifier(query, knexInstance, modelObject.alias, params)
+      modifier(query, modelObject.alias, params)
     })
   }
 
@@ -1027,7 +1027,7 @@ async function getFilteredCount(knexInstance, modelObject, whereClause) {
 // Get modifier-based count
 async function getModifierCount(knexInstance, modelObject, modifier, params) {
   const query = knexInstance(`${modelObject.tableName} as ${modelObject.alias}`)
-  modifier(query, knexInstance, modelObject.alias, params)
+  modifier(query, modelObject.alias, params)
 
   // If modifier didn't add count, add it
   const sql = query.toSQL().sql.toLowerCase()

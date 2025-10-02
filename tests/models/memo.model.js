@@ -61,7 +61,7 @@ module.exports = {
     }
   },
   modifiers: {
-    forUser: (query, knexInstance, tableAlias, { userId }) => {
+    forUser: (query, tableAlias, { userId }) => {
       query.innerJoin('user as u', {
         [`${tableAlias}.user_id`]: 'u.id',
         'u.id': userId
