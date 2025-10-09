@@ -5,6 +5,7 @@
 [![npm version](https://badge.fury.io/js/knex-tools.svg)](https://www.npmjs.com/package/knex-tools)
 [![Node.js Version](https://img.shields.io/node/v/knex-tools.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Coverage](https://img.shields.io/badge/coverage-94%25-brightgreen.svg)](https://github.com/has5aan/knex-tools)
 
 ## 📦 Installation
 
@@ -491,6 +492,25 @@ const nestedResult = await processJoins(
 
 - 📖 **[API Reference](docs/API_REFERENCE.md)** - Function documentation
 - 🏗️ **[Models Guide](docs/MODELS_GUIDE.md)** - Model definitions and patterns
+
+## 🧪 Test Coverage
+
+knex-tools maintains high test coverage to ensure reliability and stability.
+
+| Metric     | Coverage |
+| ---------- | -------- |
+| Statements | 94.38%   |
+| Branches   | 85.56%   |
+| Functions  | 91.91%   |
+| Lines      | 94.35%   |
+
+**Test Suite**: 128 tests passing
+
+Run coverage report:
+
+```bash
+npm run test:coverage
+```
 
 ## 📄 License
 
