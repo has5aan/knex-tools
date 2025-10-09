@@ -2338,25 +2338,35 @@ describe('knexTools', () => {
             }
           },
           {
-            name: 'handles filtered and zero counts',
+            name: 'applies filters to related counts',
             parameters: {
               model: userModel,
               queryConfig: {
                 projection: 'short',
-                where: { id: { in: [2, 3] } },
+                where: { id: { in: [1, 2, 3] } },
                 orderBy: { id: 'asc' },
                 withRelatedCounts: {
-                  memos: { where: { content: { contains: 'Project' } } }
+                  memos: {
+                    where: {
+                      id: { gte: 2 }
+                    }
+                  }
                 }
               }
             },
             expected: {
               data: [
                 {
+                  id: 1,
+                  name: 'Alice',
+                  email: 'alice@example.com',
+                  _counts: { memos: 1 }
+                },
+                {
                   id: 2,
                   name: 'Bob',
                   email: 'bob@example.com',
-                  _counts: { memos: 1 }
+                  _counts: { memos: 2 }
                 },
                 {
                   id: 3,
