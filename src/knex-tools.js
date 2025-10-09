@@ -665,6 +665,16 @@ async function buildQuery(knexInstance, modelObject, queryConfig) {
   // Execute main query
   const records = await query
 
+  // Populate related counts for each record
+  if (queryConfig.withRelatedCounts && records.length > 0) {
+    await populateRelatedCounts(
+      knexInstance,
+      records,
+      modelObject,
+      queryConfig.withRelatedCounts
+    )
+  }
+
   // Collect metadata if requested
   let metadata = {}
   if (queryConfig.metadata?.counts) {
@@ -955,6 +965,109 @@ async function populateManyToManyRelation(
   })
 
   return { metadata: null } // Don't propagate metadata up
+}
+
+async function populateRelatedCounts(
+  knexInstance,
+  records,
+  modelObject,
+  relatedCountsConfig
+) {
+  const primaryKey = modelObject.primaryKey || 'id'
+  const recordIds = records.map(r => r[primaryKey]).filter(Boolean)
+
+  if (recordIds.length === 0) {
+    return
+  }
+
+  for (const [relationName, config] of Object.entries(relatedCountsConfig)) {
+    if (!config) {
+      continue
+    }
+
+    const relation = modelObject.relations[relationName]
+    if (!relation) {
+      throw new Error(
+        `Relation '${relationName}' not found in model for related counts.`
+      )
+    }
+
+    if (relation.type === 'hasMany') {
+      const relatedModel = relation.modelDefinition()
+      const relatedAlias = relatedModel.alias
+      const relatedTable = relatedModel.tableName
+      const foreignKey = relation.foreignKey
+
+      const countsQuery = knexInstance(`${relatedTable} as ${relatedAlias}`)
+        .select(`${relatedAlias}.${foreignKey}`)
+        .count('* as count')
+        .whereIn(`${relatedAlias}.${foreignKey}`, recordIds)
+        .groupBy(`${relatedAlias}.${foreignKey}`)
+
+      const where = typeof config === 'object' ? config.where : null
+      if (where) {
+        applyWhereClauses(
+          countsQuery,
+          relatedAlias,
+          { where },
+          relatedModel.relations
+        )
+      }
+
+      const counts = await countsQuery
+      const countsMap = new Map(
+        counts.map(c => [c[foreignKey], parseInt(c.count, 10)])
+      )
+
+      records.forEach(record => {
+        if (!record._counts) {
+          record._counts = {}
+        }
+        record._counts[relationName] = countsMap.get(record[primaryKey]) || 0
+      })
+    } else if (relation.type === 'manyToMany') {
+      const relatedModel = relation.modelDefinition()
+      const relatedAlias = relatedModel.alias
+      const relatedTable = relatedModel.tableName
+      const junctionTable = relation.through.table
+      const parentForeignKey = relation.through.foreignKey
+      const relatedForeignKey = relation.through.otherKey
+
+      const countsQuery = knexInstance(`${junctionTable}`)
+        .select(`${junctionTable}.${parentForeignKey}`)
+        .count(`* as count`)
+        .whereIn(`${junctionTable}.${parentForeignKey}`, recordIds)
+        .groupBy(`${junctionTable}.${parentForeignKey}`)
+
+      const where = typeof config === 'object' ? config.where : null
+      if (where) {
+        countsQuery.join(
+          `${relatedTable} as ${relatedAlias}`,
+          `${junctionTable}.${relatedForeignKey}`,
+          `${relatedAlias}.${relation.primaryKey || 'id'}`
+        )
+        applyWhereClauses(
+          countsQuery,
+          relatedAlias,
+          { where },
+          relatedModel.relations
+        )
+      }
+
+      const counts = await countsQuery
+      const countsMap = new Map(
+        counts.map(c => [c[parentForeignKey], parseInt(c.count, 10)])
+      )
+
+      records.forEach(record => {
+        if (!record._counts) {
+          record._counts = {}
+        }
+        record._counts[relationName] = countsMap.get(record[primaryKey]) || 0
+      })
+    }
+    // Other relation types can be added here.
+  }
 }
 
 // Helper function to collect count metadata
