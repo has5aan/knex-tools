@@ -1039,6 +1039,23 @@ async function getModifierCount(knexInstance, modelObject, modifier, params) {
   return parseInt(result.count || result[Object.keys(result)[0]])
 }
 
+async function getCounts(knexInstance, modelObject, queryConfig = {}) {
+  if (!queryConfig.counts) {
+    throw new Error(
+      `'counts' configuration is required in getCounts. e.g., { counts: { total: true } }`
+    )
+  }
+
+  const counts = await collectCounts(
+    knexInstance,
+    modelObject,
+    queryConfig.counts,
+    queryConfig.where
+  )
+
+  return counts
+}
+
 module.exports = {
   applyWhereClauses,
   applyPagingClauses,
@@ -1046,5 +1063,6 @@ module.exports = {
   applyJoinConditions,
   processJoins,
   buildMakeTransaction,
-  buildQuery
+  buildQuery,
+  getCounts
 }

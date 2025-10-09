@@ -162,6 +162,39 @@ Relations also follow the same structure when populated with metadata:
 
 ---
 
+### getCounts
+
+**🔢 Count-Only Queries**
+
+When you only need counts without fetching data, use `getCounts` for better performance.
+
+```javascript
+const { getCounts } = require('knex-tools')
+
+// Get total and filtered counts
+const counts = await getCounts(knex, userModel, {
+  where: { active: true },
+  counts: {
+    total: true, // Total records in table
+    filtered: true // Records matching where clause
+  }
+})
+// Returns: { total: 1000, filtered: 250 }
+
+// Use with modifiers for custom counts
+const counts = await getCounts(knex, userModel, {
+  where: { role: 'admin' },
+  counts: {
+    total: true,
+    filtered: true,
+    modifiers: {
+      inactive: { active: false } // Count inactive users
+    }
+  }
+})
+// Returns: { total: 1000, filtered: 50, inactive: 100 }
+```
+
 ### applyWhereClauses
 
 **Filtering with rich operators and logical conditions.**
@@ -655,6 +688,56 @@ try {
 ```
 
 ---
+
+**Fetches only aggregate counts for a model.**
+
+This is a lightweight, optimized function for when you only need record counts without fetching the data itself.
+
+```javascript
+getCounts(knexInstance, modelObject, queryConfig)
+```
+
+#### Parameters
+
+| Parameter      | Type     | Description                                   |
+| -------------- | -------- | --------------------------------------------- |
+| `knexInstance` | `Knex`   | Knex.js database instance                     |
+| `modelObject`  | `Object` | Model definition with structure and relations |
+| `queryConfig`  | `Object` | Query configuration object                    |
+
+#### Query Configuration
+
+| Property | Type     | Description                                          | Example                           |
+| -------- | -------- | ---------------------------------------------------- | --------------------------------- |
+| `counts` | `Object` | **Required.** Specifies which counts to fetch.       | `{ total: true, filtered: true }` |
+| `where`  | `Object` | Optional filtering conditions for `filtered` counts. | `{ age: { gte: 18 } }`            |
+
+#### Examples
+
+**Get Total and Filtered Counts**
+
+```javascript
+const counts = await getCounts(knex, userModel, {
+  where: { active: true },
+  counts: {
+    total: true, // Total users in the table
+    filtered: true // Only users who are active
+  }
+})
+// Returns: { total: 100, filtered: 25 }
+```
+
+**Get Only a Specific Count**
+
+```javascript
+const totalAdmins = await getCounts(knex, userModel, {
+  where: { role: 'admin' },
+  counts: {
+    filtered: true
+  }
+})
+// Returns: { filtered: 15 }
+```
 
 ## Operators Reference
 
