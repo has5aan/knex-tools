@@ -1432,6 +1432,7 @@ describe('knexTools', () => {
       })
     })
   })
+
   describe('buildQuery', () => {
     beforeEach(async () => {
       // Insert test data with intentional empty relations
@@ -2282,6 +2283,335 @@ describe('knexTools', () => {
           // Check relation metadata structure matches expected
           expect(result).toMatchObject(expected)
         })
+      })
+    })
+  })
+
+  describe('getCounts', () => {
+    beforeEach(async () => {
+      // Insert test data
+      await db('user').insert([
+        { id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' },
+        { id: 2, name: 'Bob', email: 'bob@example.com', role: 'user' },
+        { id: 3, name: 'Charlie', email: 'charlie@example.com', role: 'user' }
+      ])
+
+      await db('folder').insert([
+        { id: 1, name: 'Work', user_id: 1 },
+        { id: 2, name: 'Personal', user_id: 1 },
+        { id: 3, name: 'Projects', user_id: 2 }
+      ])
+
+      await db('memo').insert([
+        { id: 1, content: 'Important meeting notes', user_id: 1, folder_id: 1 },
+        { id: 2, content: 'Shopping list', user_id: 1, folder_id: 2 },
+        { id: 3, content: 'Project ideas', user_id: 2, folder_id: 3 },
+        { id: 4, content: 'Untagged memo', user_id: 2, folder_id: 3 },
+        { id: 5, content: 'Orphaned memo', user_id: null, folder_id: 1 }
+      ])
+    })
+
+    describe('basic count functionality', () => {
+      const testCases = [
+        {
+          name: 'returns total count only',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              counts: {
+                total: true
+              }
+            }
+          },
+          expected: {
+            total: 5
+          }
+        },
+        {
+          name: 'returns filtered count only',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              where: { user_id: 1 },
+              counts: {
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            filtered: 2
+          }
+        },
+        {
+          name: 'returns both total and filtered counts',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              where: { user_id: 1 },
+              counts: {
+                total: true,
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            total: 5,
+            filtered: 2
+          }
+        },
+        {
+          name: 'returns total count for different model',
+          parameters: {
+            model: userModel,
+            queryConfig: {
+              counts: {
+                total: true
+              }
+            }
+          },
+          expected: {
+            total: 3
+          }
+        },
+        {
+          name: 'returns filtered count with complex where clause',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              where: {
+                OR: [{ user_id: 1 }, { user_id: 2 }]
+              },
+              counts: {
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            filtered: 4
+          }
+        },
+        {
+          name: 'returns filtered count with null values',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              where: { user_id: null },
+              counts: {
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            filtered: 1
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', async ({ parameters, expected }) => {
+        const result = await knexTools.getCounts(
+          db,
+          parameters.model,
+          parameters.queryConfig
+        )
+        expect(result).toEqual(expected)
+      })
+    })
+
+    describe('modifier-based counts', () => {
+      const testCases = [
+        {
+          name: 'returns count using single modifier',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              counts: {
+                modifiers: {
+                  forUser: { userId: 1 }
+                }
+              }
+            }
+          },
+          expected: {
+            forUser: 2
+          }
+        },
+        {
+          name: 'returns counts using modifier from long memo model',
+          parameters: {
+            model: longMemoModel,
+            queryConfig: {
+              counts: {
+                modifiers: {
+                  forUser: { userId: 1 }
+                }
+              }
+            }
+          },
+          expected: {
+            forUser: 2
+          }
+        },
+        {
+          name: 'combines total, filtered, and modifier counts',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              where: { user_id: 1 },
+              counts: {
+                total: true,
+                filtered: true,
+                modifiers: {
+                  forUser: { userId: 2 }
+                }
+              }
+            }
+          },
+          expected: {
+            total: 5,
+            filtered: 2,
+            forUser: 2
+          }
+        },
+        {
+          name: 'returns total count without applying default modifier',
+          parameters: {
+            model: longMemoModel,
+            queryConfig: {
+              counts: {
+                total: true
+              }
+            }
+          },
+          expected: {
+            total: 5
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', async ({ parameters, expected }) => {
+        const result = await knexTools.getCounts(
+          db,
+          parameters.model,
+          parameters.queryConfig
+        )
+        expect(result).toEqual(expected)
+      })
+    })
+
+    describe('error handling', () => {
+      const testCases = [
+        {
+          name: 'throws error when counts config is missing',
+          parameters: {
+            model: memoModel,
+            queryConfig: {}
+          },
+          expectedError:
+            "'counts' configuration is required in getCounts. e.g., { counts: { total: true } }"
+        },
+        {
+          name: 'throws error when counts config is undefined',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              counts: undefined
+            }
+          },
+          expectedError:
+            "'counts' configuration is required in getCounts. e.g., { counts: { total: true } }"
+        },
+        {
+          name: 'throws error for invalid modifier',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              counts: {
+                modifiers: {
+                  nonexistent: {}
+                }
+              }
+            }
+          },
+          expectedError: "Modifier 'nonexistent' not found in model"
+        }
+      ]
+
+      test.each(testCases)('$name', async ({ parameters, expectedError }) => {
+        await expect(
+          knexTools.getCounts(db, parameters.model, parameters.queryConfig)
+        ).rejects.toThrow(expectedError)
+      })
+    })
+
+    describe('edge cases', () => {
+      const testCases = [
+        {
+          name: 'returns zero for filtered count when no records match',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              where: { user_id: 999 },
+              counts: {
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            filtered: 0
+          }
+        },
+        {
+          name: 'returns correct counts when where has _exists filter',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              where: {
+                _exists: {
+                  user: { role: 'admin' }
+                }
+              },
+              counts: {
+                total: true,
+                filtered: true
+              }
+            }
+          },
+          expected: {
+            total: 5,
+            filtered: 2
+          }
+        },
+        {
+          name: 'handles empty counts object',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              counts: {}
+            }
+          },
+          expected: {}
+        },
+        {
+          name: 'handles filtered count without where clause',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              counts: {
+                filtered: true
+              }
+            }
+          },
+          expected: {}
+        }
+      ]
+
+      test.each(testCases)('$name', async ({ parameters, expected }) => {
+        const result = await knexTools.getCounts(
+          db,
+          parameters.model,
+          parameters.queryConfig
+        )
+        expect(result).toEqual(expected)
       })
     })
   })

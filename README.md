@@ -165,6 +165,37 @@ const result = await buildQuery(knex, userModel, {
 // }
 ```
 
+### **🔢 Count-Only Queries**
+
+When you only need counts without fetching data, use `getCounts` for better performance.
+
+```javascript
+const { getCounts } = require('knex-tools')
+
+// Get total and filtered counts
+const counts = await getCounts(knex, userModel, {
+  where: { active: true },
+  counts: {
+    total: true, // Total records in table
+    filtered: true // Records matching where clause
+  }
+})
+// Returns: { total: 1000, filtered: 250 }
+
+// Use with modifiers for custom counts
+const counts = await getCounts(knex, userModel, {
+  where: { role: 'admin' },
+  counts: {
+    total: true,
+    filtered: true,
+    modifiers: {
+      inactive: { active: false } // Count inactive users
+    }
+  }
+})
+// Returns: { total: 1000, filtered: 50, inactive: 100 }
+```
+
 ### **🏗️ Horizontal Table Partitioning**
 
 Modifiers are reusable query functions defined in your model. The special `default` modifier is **automatically applied** by `buildQuery` to every query, making it perfect for creating logical data partitions (e.g., active-only views, tenant isolation).
@@ -371,6 +402,7 @@ const nestedResult = await processJoins(
 
 | Function               | Purpose                         |
 | ---------------------- | ------------------------------- |
+| `getCounts`            | Lightweight count-only queries  |
 | `buildQuery`           | GraphQL-style data fetching     |
 | `applyWhereClauses`    | Rich filtering with operators   |
 | `applySortingClauses`  | Multi-field sorting             |
