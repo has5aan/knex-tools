@@ -196,6 +196,83 @@ const counts = await getCounts(knex, userModel, {
 // Returns: { total: 1000, filtered: 50, inactive: 100 }
 ```
 
+### **🔢 Related Counts**
+
+Get counts of related records per parent record efficiently with `withRelatedCounts`. This performs a single optimized GROUP BY query per relation instead of N+1 queries.
+
+```javascript
+const { buildQuery } = require('knex-tools')
+
+// Get counts of related items for each record
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  withRelatedCounts: {
+    posts: true, // Count all posts per user
+    folders: true // Count all folders per user
+  }
+})
+// Result:
+// {
+//   data: [
+//     { id: 1, name: 'John', _counts: { posts: 15, folders: 3 } },
+//     { id: 2, name: 'Jane', _counts: { posts: 8, folders: 5 } }
+//   ]
+// }
+
+// Filter related counts with where conditions
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  withRelatedCounts: {
+    posts: { where: { published: true } } // Only count published posts
+  }
+})
+// Result:
+// {
+//   data: [
+//     { id: 1, name: 'John', _counts: { posts: 10 } }, // Only published posts counted
+//     { id: 2, name: 'Jane', _counts: { posts: 0 } }   // No published posts
+//   ]
+// }
+
+// Combine with nested relations and their counts
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  withRelatedCounts: {
+    folders: true
+  },
+  each: {
+    posts: {
+      projection: 'summary',
+      withRelatedCounts: {
+        comments: true,
+        tags: { where: { active: true } }
+      }
+    }
+  }
+})
+// Result:
+// {
+//   data: [
+//     {
+//       id: 1,
+//       name: 'John',
+//       _counts: { folders: 3 },
+//       posts: {
+//         data: [
+//           { id: 10, title: 'Post 1', _counts: { comments: 5, tags: 2 } },
+//           { id: 11, title: 'Post 2', _counts: { comments: 3, tags: 1 } }
+//         ]
+//       }
+//     }
+//   ]
+// }
+```
+
+**Supported Relations:**
+
+- `hasMany` - Counts related records (e.g., user → posts)
+- `manyToMany` - Counts through junction table (e.g., post → tags)
+
 ### **🏗️ Horizontal Table Partitioning**
 
 Modifiers are reusable query functions defined in your model. The special `default` modifier is **automatically applied** by `buildQuery` to every query, making it perfect for creating logical data partitions (e.g., active-only views, tenant isolation).

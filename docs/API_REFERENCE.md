@@ -36,16 +36,17 @@ buildQuery(knexInstance, modelObject, queryConfig)
 
 #### Query Configuration
 
-| Property     | Type     | Description               | Example                                       |
-| ------------ | -------- | ------------------------- | --------------------------------------------- |
-| `projection` | `string` | Projection key from model | `'details'`                                   |
-| `where`      | `Object` | Filtering conditions      | `{ age: { gte: 18 } }`                        |
-| `orderBy`    | `Object` | Sorting configuration     | `{ name: 'asc', created_at: 'desc' }`         |
-| `take`       | `number` | Limit results             | `10`                                          |
-| `skip`       | `number` | Offset results            | `20`                                          |
-| `each`       | `Object` | Nested relation loading   | `{ posts: { projection: 'summary' } }`        |
-| `modifiers`  | `Object` | Apply named modifiers     | `{ forRole: { role: 'admin' } }`              |
-| `metadata`   | `Object` | Include metadata counts   | `{ counts: { total: true, filtered: true } }` |
+| Property            | Type     | Description                      | Example                                       |
+| ------------------- | -------- | -------------------------------- | --------------------------------------------- |
+| `projection`        | `string` | Projection key from model        | `'details'`                                   |
+| `where`             | `Object` | Filtering conditions             | `{ age: { gte: 18 } }`                        |
+| `orderBy`           | `Object` | Sorting configuration            | `{ name: 'asc', created_at: 'desc' }`         |
+| `take`              | `number` | Limit results                    | `10`                                          |
+| `skip`              | `number` | Offset results                   | `20`                                          |
+| `each`              | `Object` | Nested relation loading          | `{ posts: { projection: 'summary' } }`        |
+| `modifiers`         | `Object` | Apply named modifiers            | `{ forRole: { role: 'admin' } }`              |
+| `metadata`          | `Object` | Include metadata counts          | `{ counts: { total: true, filtered: true } }` |
+| `withRelatedCounts` | `Object` | Count related records per parent | `{ posts: true, comments: { where: {...} } }` |
 
 #### Examples
 
@@ -124,6 +125,79 @@ metadata: {
 ```
 
 **Important**: Only object format is supported. Array formats like `['total']` are not supported.
+
+#### Related Counts Configuration
+
+The `withRelatedCounts` parameter allows you to efficiently count related records for each parent record using a single GROUP BY query per relation instead of N+1 queries.
+
+**Basic Usage:**
+
+```javascript
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  withRelatedCounts: {
+    posts: true, // Count all posts per user
+    folders: true // Count all folders per user
+  }
+})
+// Returns: {
+//   data: [
+//     { id: 1, name: 'John', _counts: { posts: 15, folders: 3 } },
+//     { id: 2, name: 'Jane', _counts: { posts: 8, folders: 5 } }
+//   ]
+// }
+```
+
+**With Filtered Counts:**
+
+```javascript
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  withRelatedCounts: {
+    posts: { where: { published: true } } // Only count published posts
+  }
+})
+// Returns: {
+//   data: [
+//     { id: 1, name: 'John', _counts: { posts: 10 } },
+//     { id: 2, name: 'Jane', _counts: { posts: 0 } }
+//   ]
+// }
+```
+
+**Nested with Relations:**
+
+```javascript
+const result = await buildQuery(knex, userModel, {
+  projection: 'details',
+  withRelatedCounts: {
+    folders: true
+  },
+  each: {
+    posts: {
+      projection: 'summary',
+      withRelatedCounts: {
+        comments: true,
+        tags: { where: { active: true } }
+      }
+    }
+  }
+})
+// Each user has _counts.folders
+// Each post within user.posts has _counts.comments and _counts.tags
+```
+
+**Supported Relations:**
+
+- `hasMany` - Counts related records (e.g., user → posts)
+- `manyToMany` - Counts through junction table (e.g., post → tags)
+
+**Configuration Options:**
+
+| Format             | Description                    | Example                                     |
+| ------------------ | ------------------------------ | ------------------------------------------- |
+| `true`             | Count all related records      | `{ posts: true }`                           |
+| `{ where: {...} }` | Count filtered related records | `{ posts: { where: { published: true } } }` |
 
 #### Return Value
 

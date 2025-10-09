@@ -2284,6 +2284,110 @@ describe('knexTools', () => {
           expect(result).toMatchObject(expected)
         })
       })
+
+      describe('withRelatedCounts', () => {
+        const testCases = [
+          {
+            name: 'gets multiple hasMany and one manyToMany related counts',
+            parameters: {
+              model: userModel,
+              queryConfig: {
+                projection: 'short',
+                where: { id: 1 },
+                withRelatedCounts: {
+                  memos: true,
+                  folders: true
+                },
+                each: {
+                  memos: {
+                    projection: 'short',
+                    withRelatedCounts: {
+                      tags: true
+                    }
+                  }
+                }
+              }
+            },
+            expected: {
+              data: [
+                {
+                  id: 1,
+                  name: 'Alice',
+                  email: 'alice@example.com',
+                  _counts: { memos: 2, folders: 2 },
+                  memos: {
+                    data: [
+                      {
+                        id: 1,
+                        content: 'Important meeting notes',
+                        user_id: 1,
+                        folder_id: 1,
+                        _counts: { tags: 2 }
+                      },
+                      {
+                        id: 2,
+                        content: 'Shopping list',
+                        user_id: 1,
+                        folder_id: 2,
+                        _counts: { tags: 1 }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            name: 'applies filters to related counts',
+            parameters: {
+              model: userModel,
+              queryConfig: {
+                projection: 'short',
+                where: { id: { in: [1, 2, 3] } },
+                orderBy: { id: 'asc' },
+                withRelatedCounts: {
+                  memos: {
+                    where: {
+                      id: { gte: 2 }
+                    }
+                  }
+                }
+              }
+            },
+            expected: {
+              data: [
+                {
+                  id: 1,
+                  name: 'Alice',
+                  email: 'alice@example.com',
+                  _counts: { memos: 1 }
+                },
+                {
+                  id: 2,
+                  name: 'Bob',
+                  email: 'bob@example.com',
+                  _counts: { memos: 2 }
+                },
+                {
+                  id: 3,
+                  name: 'Charlie',
+                  email: 'charlie@example.com',
+                  _counts: { memos: 0 }
+                }
+              ]
+            }
+          }
+        ]
+
+        test.each(testCases)('$name', async ({ parameters, expected }) => {
+          const result = await knexTools.buildQuery(
+            db,
+            parameters.model,
+            parameters.queryConfig
+          )
+          expect(result).toEqual(expected)
+        })
+      })
     })
   })
 
