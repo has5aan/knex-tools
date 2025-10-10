@@ -198,13 +198,13 @@ const hasActiveAdmins = await exists(knex, userModel, {
 
 ### **🔢 Count-Only Queries**
 
-When you only need counts without fetching data, use `getCounts` for better performance.
+When you only need counts without fetching data, use `counts` for better performance.
 
 ```javascript
-const { getCounts } = require('knex-tools')
+const { counts } = require('knex-tools')
 
 // Get total and filtered counts
-const counts = await getCounts(knex, userModel, {
+const counts = await counts(knex, userModel, {
   where: { active: true },
   counts: {
     total: true, // Total records in table
@@ -214,7 +214,7 @@ const counts = await getCounts(knex, userModel, {
 // Returns: { total: 1000, filtered: 250 }
 
 // Use with modifiers for custom counts
-const counts = await getCounts(knex, userModel, {
+const counts = await counts(knex, userModel, {
   where: { role: 'admin' },
   counts: {
     total: true,
@@ -511,7 +511,7 @@ const nestedResult = await processJoins(
 | Function               | Purpose                         |
 | ---------------------- | ------------------------------- |
 | `exists`               | Lightweight existence checks    |
-| `getCounts`            | Lightweight count-only queries  |
+| `counts`               | Lightweight count-only queries  |
 | `buildQuery`           | GraphQL-style data fetching     |
 | `applyWhereClauses`    | Rich filtering with operators   |
 | `applySortingClauses`  | Multi-field sorting             |

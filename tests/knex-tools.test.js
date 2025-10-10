@@ -2391,7 +2391,7 @@ describe('knexTools', () => {
     })
   })
 
-  describe('getCounts', () => {
+  describe('counts', () => {
     beforeEach(async () => {
       // Insert test data
       await db('user').insert([
@@ -2512,7 +2512,7 @@ describe('knexTools', () => {
       ]
 
       test.each(testCases)('$name', async ({ parameters, expected }) => {
-        const result = await knexTools.getCounts(
+        const result = await knexTools.counts(
           db,
           parameters.model,
           parameters.queryConfig
@@ -2593,7 +2593,7 @@ describe('knexTools', () => {
       ]
 
       test.each(testCases)('$name', async ({ parameters, expected }) => {
-        const result = await knexTools.getCounts(
+        const result = await knexTools.counts(
           db,
           parameters.model,
           parameters.queryConfig
@@ -2611,7 +2611,7 @@ describe('knexTools', () => {
             queryConfig: {}
           },
           expectedError:
-            "'counts' configuration is required in getCounts. e.g., { counts: { total: true } }"
+            "'counts' configuration is required in counts. e.g., { counts: { total: true } }"
         },
         {
           name: 'throws error when counts config is undefined',
@@ -2622,7 +2622,7 @@ describe('knexTools', () => {
             }
           },
           expectedError:
-            "'counts' configuration is required in getCounts. e.g., { counts: { total: true } }"
+            "'counts' configuration is required in counts. e.g., { counts: { total: true } }"
         },
         {
           name: 'throws error for invalid modifier',
@@ -2642,7 +2642,7 @@ describe('knexTools', () => {
 
       test.each(testCases)('$name', async ({ parameters, expectedError }) => {
         await expect(
-          knexTools.getCounts(db, parameters.model, parameters.queryConfig)
+          knexTools.counts(db, parameters.model, parameters.queryConfig)
         ).rejects.toThrow(expectedError)
       })
     })
@@ -2710,7 +2710,7 @@ describe('knexTools', () => {
       ]
 
       test.each(testCases)('$name', async ({ parameters, expected }) => {
-        const result = await knexTools.getCounts(
+        const result = await knexTools.counts(
           db,
           parameters.model,
           parameters.queryConfig

@@ -6,7 +6,7 @@ Documentation for all knex-tools functions and their parameters.
 
 - [Core Functions](#core-functions)
   - [exists](#exists)
-  - [getCounts](#getcounts)
+  - [counts](#counts)
   - [buildQuery](#buildquery)
   - [applyWhereClauses](#applywhereclauses)
   - [applySortingClauses](#applysortingclauses)
@@ -331,17 +331,17 @@ The `exists` function is optimized for performance:
 
 ---
 
-### getCounts
+### counts
 
 **🔢 Count-Only Queries**
 
-When you only need counts without fetching data, use `getCounts` for better performance.
+When you only need counts without fetching data, use `counts` for better performance.
 
 ```javascript
-const { getCounts } = require('knex-tools')
+const { counts } = require('knex-tools')
 
 // Get total and filtered counts
-const counts = await getCounts(knex, userModel, {
+const counts = await counts(knex, userModel, {
   where: { active: true },
   counts: {
     total: true, // Total records in table
@@ -351,7 +351,7 @@ const counts = await getCounts(knex, userModel, {
 // Returns: { total: 1000, filtered: 250 }
 
 // Use with modifiers for custom counts
-const counts = await getCounts(knex, userModel, {
+const counts = await counts(knex, userModel, {
   where: { role: 'admin' },
   counts: {
     total: true,
@@ -863,7 +863,7 @@ try {
 This is a lightweight, optimized function for when you only need record counts without fetching the data itself.
 
 ```javascript
-getCounts(knexInstance, modelObject, queryConfig)
+counts(knexInstance, modelObject, queryConfig)
 ```
 
 #### Parameters
@@ -886,7 +886,7 @@ getCounts(knexInstance, modelObject, queryConfig)
 **Get Total and Filtered Counts**
 
 ```javascript
-const counts = await getCounts(knex, userModel, {
+const counts = await counts(knex, userModel, {
   where: { active: true },
   counts: {
     total: true, // Total users in the table
@@ -899,7 +899,7 @@ const counts = await getCounts(knex, userModel, {
 **Get Only a Specific Count**
 
 ```javascript
-const totalAdmins = await getCounts(knex, userModel, {
+const totalAdmins = await counts(knex, userModel, {
   where: { role: 'admin' },
   counts: {
     filtered: true
