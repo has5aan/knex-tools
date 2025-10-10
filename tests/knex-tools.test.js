@@ -2719,4 +2719,140 @@ describe('knexTools', () => {
       })
     })
   })
+
+  describe('exists', () => {
+    beforeEach(async () => {
+      // Insert test data
+      await db('user').insert([
+        { id: 1, name: 'Alice', email: 'alice@example.com', role: 'admin' },
+        { id: 2, name: 'Bob', email: 'bob@example.com', role: 'user' }
+      ])
+
+      await db('memo').insert([
+        { id: 1, content: 'Important meeting notes', user_id: 1, folder_id: 1 },
+        { id: 2, content: 'Shopping list', user_id: 1, folder_id: 2 }
+      ])
+    })
+
+    const testCases = [
+      {
+        name: 'returns true when records exist',
+        parameters: {
+          model: userModel,
+          queryConfig: {}
+        },
+        expected: true
+      },
+      {
+        name: 'returns false when no records exist',
+        parameters: {
+          model: folderModel,
+          queryConfig: {}
+        },
+        expected: false
+      },
+      {
+        name: 'returns true with where clause when match exists',
+        parameters: {
+          model: userModel,
+          queryConfig: {
+            where: { role: 'admin' }
+          }
+        },
+        expected: true
+      },
+      {
+        name: 'returns false with where clause when no match exists',
+        parameters: {
+          model: userModel,
+          queryConfig: {
+            where: { role: 'superadmin' }
+          }
+        },
+        expected: false
+      },
+      {
+        name: 'returns true with modifier when match exists',
+        parameters: {
+          model: memoModel,
+          queryConfig: {
+            modifiers: {
+              forUser: { userId: 1 }
+            }
+          }
+        },
+        expected: true
+      },
+      {
+        name: 'returns false with modifier when no match exists',
+        parameters: {
+          model: memoModel,
+          queryConfig: {
+            modifiers: {
+              forUser: { userId: 999 }
+            }
+          }
+        },
+        expected: false
+      },
+      {
+        name: 'returns true with both where and modifier when match exists',
+        parameters: {
+          model: memoModel,
+          queryConfig: {
+            where: { id: 1 },
+            modifiers: {
+              forUser: { userId: 1 }
+            }
+          }
+        },
+        expected: true
+      },
+      {
+        name: 'returns false with both where and modifier when no match exists',
+        parameters: {
+          model: memoModel,
+          queryConfig: {
+            where: { id: 999 },
+            modifiers: {
+              forUser: { userId: 1 }
+            }
+          }
+        },
+        expected: false
+      }
+    ]
+
+    test.each(testCases)('$name', async ({ parameters, expected }) => {
+      const result = await knexTools.exists(
+        db,
+        parameters.model,
+        parameters.queryConfig
+      )
+      expect(result).toBe(expected)
+    })
+
+    describe('error handling', () => {
+      const testCases = [
+        {
+          name: 'throws error for invalid modifier',
+          parameters: {
+            model: memoModel,
+            queryConfig: {
+              modifiers: {
+                nonexistent: {}
+              }
+            }
+          },
+          expectedError: "Modifier 'nonexistent' not found in model"
+        }
+      ]
+
+      test.each(testCases)('$name', async ({ parameters, expectedError }) => {
+        await expect(
+          knexTools.exists(db, parameters.model, parameters.queryConfig)
+        ).rejects.toThrow(expectedError)
+      })
+    })
+  })
 })

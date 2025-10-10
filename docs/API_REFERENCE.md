@@ -5,6 +5,8 @@ Documentation for all knex-tools functions and their parameters.
 ## Table of Contents
 
 - [Core Functions](#core-functions)
+  - [exists](#exists)
+  - [getCounts](#getcounts)
   - [buildQuery](#buildquery)
   - [applyWhereClauses](#applywhereclauses)
   - [applySortingClauses](#applysortingclauses)
@@ -233,6 +235,99 @@ Relations also follow the same structure when populated with metadata:
   ]
 }
 ```
+
+---
+
+### exists
+
+**✅ Lightweight Existence Checks**
+
+Check if records exist without fetching them. Uses `SELECT 1 LIMIT 1` internally for optimal performance.
+
+```javascript
+exists(knexInstance, modelObject, queryConfig)
+```
+
+#### Parameters
+
+| Parameter      | Type     | Description                  |
+| -------------- | -------- | ---------------------------- |
+| `knexInstance` | `Knex`   | Knex.js database instance    |
+| `modelObject`  | `Object` | Model definition             |
+| `queryConfig`  | `Object` | Optional query configuration |
+
+#### Query Configuration
+
+| Property    | Type     | Description           | Example              |
+| ----------- | -------- | --------------------- | -------------------- |
+| `where`     | `Object` | Filtering conditions  | `{ role: 'admin' }`  |
+| `modifiers` | `Object` | Apply named modifiers | `{ activeOnly: {} }` |
+
+#### Return Value
+
+Returns a **boolean**: `true` if at least one record exists matching the criteria, `false` otherwise.
+
+#### Examples
+
+**Basic Existence Check**
+
+```javascript
+const { exists } = require('knex-tools')
+
+// Check if any users exist
+const hasUsers = await exists(knex, userModel, {})
+// Returns: true or false
+```
+
+**With Filters**
+
+```javascript
+// Check if admin users exist
+const hasAdmins = await exists(knex, userModel, {
+  where: { role: 'admin' }
+})
+// Returns: true or false
+
+// Complex filters with operators
+const hasRecentActiveUsers = await exists(knex, userModel, {
+  where: {
+    active: true,
+    lastLogin: { gte: '2024-01-01' },
+    OR: [{ role: 'admin' }, { permissions: { contains: 'write' } }]
+  }
+})
+// Returns: true or false
+```
+
+**With Modifiers**
+
+```javascript
+// Check using model modifiers
+const hasActiveAdmins = await exists(knex, userModel, {
+  where: { role: 'admin' },
+  modifiers: {
+    activeOnly: {}
+  }
+})
+// Returns: true or false
+
+// Multiple modifiers are combined
+const result = await exists(knex, postModel, {
+  modifiers: {
+    published: {},
+    recent: { days: 7 }
+  }
+})
+// Returns: true or false
+```
+
+#### Performance
+
+The `exists` function is optimized for performance:
+
+- Uses `SELECT 1 LIMIT 1` instead of counting or fetching full records
+- Returns immediately after finding the first matching record
+- Ideal for conditional logic and authorization checks
 
 ---
 

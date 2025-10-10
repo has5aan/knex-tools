@@ -1169,6 +1169,41 @@ async function getCounts(knexInstance, modelObject, queryConfig = {}) {
   return counts
 }
 
+async function exists(knexInstance, modelObject, queryConfig = {}) {
+  const query = knexInstance(`${modelObject.tableName} as ${modelObject.alias}`)
+    .select(1)
+    .limit(1)
+
+  // Apply default modifier if present
+  if (modelObject.modifiers && modelObject.modifiers.default) {
+    modelObject.modifiers.default(query, modelObject.alias)
+  }
+
+  // Apply ALL requested modifiers to the SAME query
+  if (queryConfig.modifiers && modelObject.modifiers) {
+    Object.entries(queryConfig.modifiers).forEach(([modifierName, params]) => {
+      const modifier = modelObject.modifiers[modifierName]
+      if (!modifier) {
+        throw new Error(`Modifier '${modifierName}' not found in model`)
+      }
+      modifier(query, modelObject.alias, params)
+    })
+  }
+
+  // Apply where clauses to the SAME query
+  if (queryConfig.where) {
+    applyWhereClauses(
+      query,
+      modelObject.alias,
+      { where: queryConfig.where },
+      modelObject.relations
+    )
+  }
+
+  const result = await query.first()
+  return !!result
+}
+
 module.exports = {
   applyWhereClauses,
   applyPagingClauses,
@@ -1177,5 +1212,6 @@ module.exports = {
   processJoins,
   buildMakeTransaction,
   buildQuery,
-  getCounts
+  getCounts,
+  exists
 }

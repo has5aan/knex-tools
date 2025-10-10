@@ -166,6 +166,36 @@ const result = await buildQuery(knex, userModel, {
 // }
 ```
 
+### **✅ Existence Checks**
+
+When you only need to know if records exist (without fetching them), use `exists` for optimal performance. It uses `SELECT 1 LIMIT 1` internally.
+
+```javascript
+const { exists } = require('knex-tools')
+
+// Check if any users exist
+const hasUsers = await exists(knex, userModel, {})
+// Returns: true or false
+
+// Check if specific records exist
+const hasAdmins = await exists(knex, userModel, {
+  where: { role: 'admin' }
+})
+// Returns: true or false
+
+// Combine filters and modifiers
+const hasActiveAdmins = await exists(knex, userModel, {
+  where: {
+    role: 'admin',
+    lastLogin: { gte: '2024-01-01' }
+  },
+  modifiers: {
+    activeOnly: {}
+  }
+})
+// Returns: true or false
+```
+
 ### **🔢 Count-Only Queries**
 
 When you only need counts without fetching data, use `getCounts` for better performance.
@@ -480,6 +510,7 @@ const nestedResult = await processJoins(
 
 | Function               | Purpose                         |
 | ---------------------- | ------------------------------- |
+| `exists`               | Lightweight existence checks    |
 | `getCounts`            | Lightweight count-only queries  |
 | `buildQuery`           | GraphQL-style data fetching     |
 | `applyWhereClauses`    | Rich filtering with operators   |
