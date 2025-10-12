@@ -1204,6 +1204,8 @@ async function exists(knexInstance, modelObject, queryConfig = {}) {
   return !!result
 }
 
+const queryBuilder = require('./query-builder')
+
 module.exports = {
   applyWhereClauses,
   applyPagingClauses,
@@ -1213,5 +1215,14 @@ module.exports = {
   buildMakeTransaction,
   buildQuery,
   counts,
-  exists
+  exists,
+  // Fluent API
+  query: queryBuilder.query,
+  where: queryBuilder.where,
+  countQuery: queryBuilder.countQuery,
+  existsQuery: queryBuilder.existsQuery,
+  QueryBuilder: queryBuilder.QueryBuilder,
+  WhereBuilder: queryBuilder.WhereBuilder,
+  CountsBuilder: queryBuilder.CountsBuilder,
+  ExistsBuilder: queryBuilder.ExistsBuilder
 }
