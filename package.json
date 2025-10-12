@@ -2,9 +2,9 @@
   "name": "knex-tools",
   "version": "3.0.0",
   "description": "A utility library that extends Knex.js with query building capabilities, filtering, pagination, sorting, and transaction management.",
-  "main": "src/knex-tools.js",
+  "main": "src/index.js",
   "exports": {
-    ".": "./src/knex-tools.js",
+    ".": "./src/index.js",
     "./package.json": "./package.json"
   },
   "files": [
