@@ -5,7 +5,7 @@
 [![npm version](https://badge.fury.io/js/knex-tools.svg)](https://www.npmjs.com/package/knex-tools)
 [![Node.js Version](https://img.shields.io/node/v/knex-tools.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Coverage](https://img.shields.io/badge/coverage-94%25-brightgreen.svg)](https://github.com/has5aan/knex-tools)
+[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](https://github.com/has5aan/knex-tools)
 
 ## 📦 Installation
 
@@ -643,14 +643,29 @@ const nestedResult = await processJoins(
 
 knex-tools maintains high test coverage to ensure reliability and stability.
 
+### Query Execution (knex-tools.js)
+
+Core query building, filtering, sorting, pagination, and data fetching logic.
+
 | Metric     | Coverage |
 | ---------- | -------- |
-| Statements | 95.65%   |
-| Branches   | 87.44%   |
-| Functions  | 94.70%   |
-| Lines      | 95.63%   |
+| Statements | 98.14%   |
+| Branches   | 89.72%   |
+| Functions  | 98.50%   |
+| Lines      | 98.13%   |
 
-**Test Suite**: 223 tests passing
+### Query Building (query-builder.js)
+
+Fluent API for WhereBuilder, QueryBuilder, CountsBuilder, and ExistsBuilder.
+
+| Metric     | Coverage |
+| ---------- | -------- |
+| Statements | 100%     |
+| Branches   | 100%     |
+| Functions  | 100%     |
+| Lines      | 100%     |
+
+**Test Suite**: 242 tests passing
 
 Run coverage report:
 

@@ -271,27 +271,12 @@ function applySortingClauses(query, table, criteria, defaultSortOptions) {
   return query
 }
 
-async function executeUnitOfWork(knexInstance, callback) {
-  const trx = await knexInstance.transaction()
-  try {
-    const result = await callback(trx)
-    await trx.commit()
-    return result
-  } catch (error) {
-    await trx.rollback()
-    throw error
-  }
-}
-
-function buildMakeTransaction(knexInstance) {
-  return async function (callback) {
-    return executeUnitOfWork(knexInstance, callback)
-  }
-}
-
 function processJoins(query, rootModel, joins, relations) {
-  if (!joins || !relations) {
-    return
+  if (!joins) {
+    throw new Error('joins parameter is required in processJoins')
+  }
+  if (!relations) {
+    throw new Error('relations parameter is required in processJoins')
   }
 
   Object.entries(joins).forEach(([relationName, options]) => {
@@ -1210,7 +1195,6 @@ module.exports = {
   applySortingClauses,
   applyJoinConditions,
   processJoins,
-  buildMakeTransaction,
   buildQuery,
   counts,
   exists

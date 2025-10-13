@@ -342,6 +342,92 @@ describe('knexTools', () => {
       })
     })
 
+    describe('edge cases', () => {
+      const testCases = [
+        {
+          name: 'returns query unchanged when criteria is null',
+          parameters: {
+            criteria: null
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        },
+        {
+          name: 'returns query unchanged when criteria is undefined',
+          parameters: {
+            criteria: undefined
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        },
+        {
+          name: 'returns query unchanged when where clause is missing',
+          parameters: {
+            criteria: {}
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        },
+        {
+          name: 'returns query unchanged when where clause is null',
+          parameters: {
+            criteria: { where: null }
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        },
+        {
+          name: 'skips unknown underscore-prefixed fields',
+          parameters: {
+            criteria: {
+              where: {
+                user_id: 1,
+                _customField: 'test',
+                _internal: true
+              }
+            }
+          },
+          expected: {
+            sql: 'select * from `folder` where `folder`.`user_id` = ?',
+            bindings: [1]
+          }
+        },
+        {
+          name: 'skips multiple unknown underscore-prefixed fields with complex query',
+          parameters: {
+            criteria: {
+              where: {
+                name: { contains: 'Work' },
+                _metadata: { some: 'data' },
+                user_id: { gt: 0 },
+                _private: 'secret',
+                _debug: true
+              }
+            }
+          },
+          expected: {
+            sql: 'select * from `folder` where `folder`.`name` like ? and `folder`.`user_id` > ?',
+            bindings: ['%Work%', 0]
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', ({ parameters, expected }) => {
+        const query = db('folder').select('*')
+        knexTools.applyWhereClauses(query, 'folder', parameters.criteria)
+        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
+      })
+    })
+
     describe('_exists operator for RLS', () => {
       describe('belongsTo relationships', () => {
         const testCases = [
@@ -591,6 +677,48 @@ describe('knexTools', () => {
       knexTools.applyPagingClauses(query, parameters.criteria)
       expect(query.toSQL().sql).toMatch(expected.sql)
       expect(query.toSQL().bindings).toEqual(expected.bindings)
+    })
+
+    describe('edge cases', () => {
+      const testCases = [
+        {
+          name: 'returns query unchanged when criteria is null',
+          parameters: {
+            criteria: null
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        },
+        {
+          name: 'returns query unchanged when criteria is undefined',
+          parameters: {
+            criteria: undefined
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        },
+        {
+          name: 'returns query unchanged when criteria is empty object',
+          parameters: {
+            criteria: {}
+          },
+          expected: {
+            sql: 'select * from `folder`',
+            bindings: []
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', ({ parameters, expected }) => {
+        const query = db('folder').select('*')
+        knexTools.applyPagingClauses(query, parameters.criteria)
+        expect(query.toSQL().sql).toMatch(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
+      })
     })
   })
 
@@ -1002,6 +1130,50 @@ describe('knexTools', () => {
         expect(query.toSQL().bindings).toEqual(expected.bindings)
       })
     })
+
+    describe('edge cases', () => {
+      const testCases = [
+        {
+          name: 'returns query unchanged when conditions is null',
+          parameters: {
+            joinConditions: null
+          },
+          expected: {
+            sql: 'select * from `folder` left join `user`',
+            bindings: []
+          }
+        },
+        {
+          name: 'returns query unchanged when conditions is undefined',
+          parameters: {
+            joinConditions: undefined
+          },
+          expected: {
+            sql: 'select * from `folder` left join `user`',
+            bindings: []
+          }
+        },
+        {
+          name: 'returns query unchanged when conditions is empty object',
+          parameters: {
+            joinConditions: {}
+          },
+          expected: {
+            sql: 'select * from `folder` left join `user`',
+            bindings: []
+          }
+        }
+      ]
+
+      test.each(testCases)('$name', ({ parameters, expected }) => {
+        const query = db('folder').select('*')
+        query.leftJoin('user', function () {
+          knexTools.applyJoinConditions(this, 'user', parameters.joinConditions)
+        })
+        expect(query.toSQL().sql).toBe(expected.sql)
+        expect(query.toSQL().bindings).toEqual(expected.bindings)
+      })
+    })
   })
 
   describe('processJoins', () => {
@@ -1326,6 +1498,38 @@ describe('knexTools', () => {
 
     describe('error handling', () => {
       const testCases = [
+        {
+          name: 'processJoins throws error when joins parameter is missing',
+          parameters: {
+            model: memoModel,
+            join: null
+          },
+          expectedError: 'joins parameter is required in processJoins'
+        },
+        {
+          name: 'processJoins throws error when joins parameter is undefined',
+          parameters: {
+            model: memoModel,
+            join: undefined
+          },
+          expectedError: 'joins parameter is required in processJoins'
+        },
+        {
+          name: 'processJoins throws error when relations parameter is missing',
+          parameters: {
+            model: { ...memoModel, relations: null },
+            join: { user: { projection: 'details' } }
+          },
+          expectedError: 'relations parameter is required in processJoins'
+        },
+        {
+          name: 'processJoins throws error when relations parameter is undefined',
+          parameters: {
+            model: { ...memoModel, relations: undefined },
+            join: { user: { projection: 'details' } }
+          },
+          expectedError: 'relations parameter is required in processJoins'
+        },
         {
           name: 'processJoins throws error when relation not found in relations config',
           parameters: {
@@ -2376,6 +2580,42 @@ describe('knexTools', () => {
                 }
               ]
             }
+          },
+          {
+            name: 'counts manyToMany relations with where filter',
+            parameters: {
+              model: memoModel,
+              queryConfig: {
+                projection: 'short',
+                where: { id: { in: [1, 2] } },
+                orderBy: { id: 'asc' },
+                withRelatedCounts: {
+                  tags: {
+                    where: {
+                      name: 'urgent'
+                    }
+                  }
+                }
+              }
+            },
+            expected: {
+              data: [
+                {
+                  id: 1,
+                  content: 'Important meeting notes',
+                  user_id: 1,
+                  folder_id: 1,
+                  _counts: { tags: 1 }
+                },
+                {
+                  id: 2,
+                  content: 'Shopping list',
+                  user_id: 1,
+                  folder_id: 2,
+                  _counts: { tags: 0 }
+                }
+              ]
+            }
           }
         ]
 
@@ -2386,6 +2626,35 @@ describe('knexTools', () => {
             parameters.queryConfig
           )
           expect(result).toEqual(expected)
+        })
+
+        test('throws error for invalid relation in withRelatedCounts', async () => {
+          await expect(
+            knexTools.buildQuery(db, userModel, {
+              projection: 'short',
+              where: { id: 1 },
+              withRelatedCounts: {
+                nonexistent: true
+              }
+            })
+          ).rejects.toThrow(
+            "Relation 'nonexistent' not found in model for related counts."
+          )
+        })
+
+        test('returns empty data when no records match query with withRelatedCounts', async () => {
+          const result = await knexTools.buildQuery(db, userModel, {
+            projection: 'short',
+            where: { id: 999 }, // No user with ID 999 exists
+            withRelatedCounts: {
+              memos: true,
+              folders: true
+            }
+          })
+
+          expect(result).toEqual({
+            data: []
+          })
         })
       })
     })
