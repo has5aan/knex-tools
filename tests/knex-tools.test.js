@@ -1838,6 +1838,38 @@ describe('knexTools', () => {
           expect(result).toEqual(expected)
         })
 
+        test('belongsTo relation returns null when related record does not exist', async () => {
+          // Insert a memo with a non-existent user_id (orphaned reference)
+          await db('memo').insert({
+            id: 6,
+            content: 'Orphaned reference memo',
+            user_id: 999, // User 999 doesn't exist
+            folder_id: 1
+          })
+
+          const result = await knexTools.buildQuery(db, memoModel, {
+            projection: 'short',
+            where: { id: 6 },
+            each: {
+              user: { projection: 'short' }
+            }
+          })
+
+          // user_id exists but points to non-existent user
+          // Should set user relation to null
+          expect(result).toEqual({
+            data: [
+              {
+                id: 6,
+                content: 'Orphaned reference memo',
+                user_id: 999,
+                folder_id: 1,
+                user: null
+              }
+            ]
+          })
+        })
+
         test('belongsTo relation validation is skipped when no records returned', async () => {
           // This should not throw even though 'basic' projection doesn't include user_id
           // because there are no records to validate
