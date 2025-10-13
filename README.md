@@ -5,7 +5,7 @@
 [![npm version](https://badge.fury.io/js/knex-tools.svg)](https://www.npmjs.com/package/knex-tools)
 [![Node.js Version](https://img.shields.io/node/v/knex-tools.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Coverage](https://img.shields.io/badge/coverage-94%25-brightgreen.svg)](https://github.com/has5aan/knex-tools)
+[![Coverage](https://img.shields.io/badge/coverage-98%25-brightgreen.svg)](https://github.com/has5aan/knex-tools)
 
 ## 📦 Installation
 
@@ -452,6 +452,121 @@ const prolificAdmins = await buildQuery(knex, userModel, {
 })
 ```
 
+## ⚡ Fluent API
+
+Build queries with a chainable, type-safe interface as an alternative to plain object configuration:
+
+### **QueryBuilder**
+
+Fluent interface for `buildQuery`:
+
+```javascript
+const { query } = require('knex-tools')
+
+// Basic query
+const result = await query(userModel)
+  .projection('details')
+  .where(w =>
+    w.equals('active', true).in('role', ['admin', 'manager']).gte('age', 18)
+  )
+  .orderBy('created_at', 'desc')
+  .take(10)
+  .execute(knex)
+
+// Nested data fetching with relations
+const posts = await query(postModel)
+  .projection('details')
+  .with('author', 'profile')
+  .with('comments', q =>
+    q
+      .projection('summary')
+      .where(w => w.equals('approved', true))
+      .orderBy('created_at', 'desc')
+      .take(5)
+  )
+  .withCounts('tags')
+  .execute(knex)
+```
+
+### **CountsBuilder**
+
+Fluent interface for `counts`:
+
+```javascript
+const { countQuery } = require('knex-tools')
+
+// Get total and filtered counts
+const result = await countQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .total()
+  .filtered()
+  .execute(knex)
+// Returns: { total: 1000, filtered: 50 }
+
+// With modifiers
+const result = await countQuery(userModel)
+  .where(w => w.gte('age', 18))
+  .total()
+  .filtered()
+  .modifier('inactive', { active: false })
+  .execute(knex)
+// Returns: { total: 1000, filtered: 800, inactive: 200 }
+```
+
+### **ExistsBuilder**
+
+Fluent interface for `exists`:
+
+```javascript
+const { existsQuery } = require('knex-tools')
+
+// Check if records exist
+const hasAdmins = await existsQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .execute(knex)
+// Returns: true or false
+
+// With modifiers
+const hasActiveAdmins = await existsQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .modifier('activeOnly')
+  .execute(knex)
+// Returns: true or false
+```
+
+### **WhereBuilder**
+
+Build complex where conditions for any query function:
+
+```javascript
+const { where, applyWhereClauses } = require('knex-tools')
+
+// Build conditions with fluent API
+const filters = where()
+  .equals('verified', true)
+  .or(or =>
+    or.contains('email', '@company.com').contains('email', '@partner.com')
+  )
+  .and(and => and.gte('age', 18).lte('age', 65))
+  .build()
+
+// Use with applyWhereClauses
+const query = knex('users as u').select('*')
+applyWhereClauses(query, 'u', { where: filters }, userModel.relations)
+const users = await query
+
+// Or use directly with query builders
+const result = await query(userModel)
+  .where(w =>
+    w
+      .equals('active', true)
+      .or(or => or.equals('role', 'admin').equals('role', 'manager'))
+  )
+  .execute(knex)
+```
+
+**See:** [Full Fluent API Documentation](docs/API_REFERENCE.md#fluent-api)
+
 ## 🏢 Advanced Features
 
 ### **🔗 JOINs**
@@ -528,14 +643,29 @@ const nestedResult = await processJoins(
 
 knex-tools maintains high test coverage to ensure reliability and stability.
 
+### Query Execution (knex-tools.js)
+
+Core query building, filtering, sorting, pagination, and data fetching logic.
+
 | Metric     | Coverage |
 | ---------- | -------- |
-| Statements | 94.38%   |
-| Branches   | 85.56%   |
-| Functions  | 91.91%   |
-| Lines      | 94.35%   |
+| Statements | 98.14%   |
+| Branches   | 89.72%   |
+| Functions  | 98.50%   |
+| Lines      | 98.13%   |
 
-**Test Suite**: 128 tests passing
+### Query Building (query-builder.js)
+
+Fluent API for WhereBuilder, QueryBuilder, CountsBuilder, and ExistsBuilder.
+
+| Metric     | Coverage |
+| ---------- | -------- |
+| Statements | 100%     |
+| Branches   | 100%     |
+| Functions  | 100%     |
+| Lines      | 100%     |
+
+**Test Suite**: 242 tests passing
 
 Run coverage report:
 

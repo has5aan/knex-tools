@@ -13,6 +13,11 @@ Documentation for all knex-tools functions and their parameters.
   - [applyPagingClauses](#applypagingclauses)
   - [processJoins](#processjoins)
   - [buildMakeTransaction](#buildmaketransaction)
+- [Fluent API](#fluent-api)
+  - [WhereBuilder](#wherebuilder)
+  - [QueryBuilder](#querybuilder)
+  - [CountsBuilder](#countsbuilder)
+  - [ExistsBuilder](#existsbuilder)
 - [Operators Reference](#operators-reference)
 - [Model Structure](#model-structure)
 
@@ -858,56 +863,6 @@ try {
 
 ---
 
-**Fetches only aggregate counts for a model.**
-
-This is a lightweight, optimized function for when you only need record counts without fetching the data itself.
-
-```javascript
-counts(knexInstance, modelObject, queryConfig)
-```
-
-#### Parameters
-
-| Parameter      | Type     | Description                                   |
-| -------------- | -------- | --------------------------------------------- |
-| `knexInstance` | `Knex`   | Knex.js database instance                     |
-| `modelObject`  | `Object` | Model definition with structure and relations |
-| `queryConfig`  | `Object` | Query configuration object                    |
-
-#### Query Configuration
-
-| Property | Type     | Description                                          | Example                           |
-| -------- | -------- | ---------------------------------------------------- | --------------------------------- |
-| `counts` | `Object` | **Required.** Specifies which counts to fetch.       | `{ total: true, filtered: true }` |
-| `where`  | `Object` | Optional filtering conditions for `filtered` counts. | `{ age: { gte: 18 } }`            |
-
-#### Examples
-
-**Get Total and Filtered Counts**
-
-```javascript
-const counts = await counts(knex, userModel, {
-  where: { active: true },
-  counts: {
-    total: true, // Total users in the table
-    filtered: true // Only users who are active
-  }
-})
-// Returns: { total: 100, filtered: 25 }
-```
-
-**Get Only a Specific Count**
-
-```javascript
-const totalAdmins = await counts(knex, userModel, {
-  where: { role: 'admin' },
-  counts: {
-    filtered: true
-  }
-})
-// Returns: { filtered: 15 }
-```
-
 ## Operators Reference
 
 ### Comparison Operators
@@ -1209,4 +1164,1811 @@ try {
   console.error('Query failed:', error.message)
   throw new Error('Failed to fetch users')
 }
+```
+
+---
+
+## Fluent API
+
+The Fluent API provides a chainable, type-safe interface for building queries. It offers an alternative to plain object configuration with improved developer experience through method chaining and IDE autocomplete support.
+
+### WhereBuilder
+
+**Fluent API for building where conditions with method chaining.**
+
+```javascript
+const { where } = require('knex-tools')
+```
+
+The `WhereBuilder` class provides a fluent interface for constructing complex where conditions that can be used with `query()`, `countQuery()`, and `existsQuery()` builders.
+
+#### Factory Function
+
+```javascript
+where()
+```
+
+Creates a new `WhereBuilder` instance.
+
+**Returns:** `WhereBuilder` instance
+
+**Example:**
+
+```javascript
+const condition = where().equals('role', 'admin').gte('age', 18).build()
+
+// Result: { role: 'admin', age: { gte: 18 } }
+```
+
+---
+
+#### Comparison Operators
+
+##### `.equals(field, value)`
+
+Adds an equality condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (any): Value to match
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().equals('role', 'admin').build()
+// { role: 'admin' }
+```
+
+##### `.not(field, value)`
+
+Adds a not-equal condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (any): Value to exclude
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().not('status', 'deleted').build()
+// { status: { not: 'deleted' } }
+```
+
+##### `.gt(field, value)`
+
+Adds a greater-than condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (number): Minimum value (exclusive)
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().gt('age', 18).build()
+// { age: { gt: 18 } }
+```
+
+##### `.gte(field, value)`
+
+Adds a greater-than-or-equal condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (number): Minimum value (inclusive)
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().gte('age', 18).build()
+// { age: { gte: 18 } }
+```
+
+##### `.lt(field, value)`
+
+Adds a less-than condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (number): Maximum value (exclusive)
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().lt('age', 65).build()
+// { age: { lt: 65 } }
+```
+
+##### `.lte(field, value)`
+
+Adds a less-than-or-equal condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (number): Maximum value (inclusive)
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().lte('age', 65).build()
+// { age: { lte: 65 } }
+```
+
+##### `.contains(field, value)`
+
+Adds a string contains condition (case-insensitive on PostgreSQL).
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (string): Substring to search for
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().contains('email', 'example').build()
+// { email: { contains: 'example' } }
+```
+
+##### `.startsWith(field, value)`
+
+Adds a string starts-with condition (case-insensitive on PostgreSQL).
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (string): Prefix to match
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().startsWith('name', 'John').build()
+// { name: { startsWith: 'John' } }
+```
+
+##### `.endsWith(field, value)`
+
+Adds a string ends-with condition (case-insensitive on PostgreSQL).
+
+**Parameters:**
+
+- `field` (string): Field name
+- `value` (string): Suffix to match
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().endsWith('email', '@example.com').build()
+// { email: { endsWith: '@example.com' } }
+```
+
+##### `.in(field, values)`
+
+Adds an IN condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `values` (Array): Array of values to match
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().in('role', ['admin', 'manager']).build()
+// { role: { in: ['admin', 'manager'] } }
+```
+
+##### `.notIn(field, values)`
+
+Adds a NOT IN condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+- `values` (Array): Array of values to exclude
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().notIn('status', ['deleted', 'banned']).build()
+// { status: { notIn: ['deleted', 'banned'] } }
+```
+
+##### `.isNull(field)`
+
+Adds an IS NULL condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().isNull('deleted_at').build()
+// { deleted_at: { isNull: true } }
+```
+
+##### `.isNotNull(field)`
+
+Adds an IS NOT NULL condition.
+
+**Parameters:**
+
+- `field` (string): Field name
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where().isNotNull('email').build()
+// { email: { isNotNull: true } }
+```
+
+---
+
+#### Chaining Multiple Conditions
+
+Multiple conditions on different fields are combined with AND logic:
+
+```javascript
+where().equals('role', 'admin').gte('age', 18).isNotNull('email').build()
+// Result: { role: 'admin', age: { gte: 18 }, email: { isNotNull: true } }
+```
+
+Multiple operators on the same field are merged:
+
+```javascript
+where().gte('age', 18).lte('age', 65).build()
+// Result: { age: { gte: 18, lte: 65 } }
+```
+
+---
+
+#### Logical Operators
+
+##### `.and(callback)`
+
+Adds an AND block with nested conditions.
+
+**Parameters:**
+
+- `callback` (Function): Function that receives a `WhereBuilder` instance
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where()
+  .equals('active', true)
+  .and(and => and.equals('verified', true).gte('age', 18))
+  .build()
+// Result: { active: true, AND: [{ verified: true, age: { gte: 18 } }] }
+```
+
+**Multiple AND blocks:**
+
+```javascript
+where()
+  .and(a1 => a1.equals('verified', true))
+  .and(a2 => a2.gte('age', 18))
+  .build()
+// Result: { AND: [{ verified: true }, { age: { gte: 18 } }] }
+```
+
+##### `.or(callback)`
+
+Adds an OR block with nested conditions.
+
+**Parameters:**
+
+- `callback` (Function): Function that receives a `WhereBuilder` instance
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where()
+  .equals('active', true)
+  .or(or => or.equals('role', 'admin').contains('email', '@admin.com'))
+  .build()
+// Result: { active: true, OR: [{ role: 'admin', email: { contains: '@admin.com' } }] }
+```
+
+**Multiple OR blocks:**
+
+```javascript
+where()
+  .or(or1 => or1.equals('role', 'admin'))
+  .or(or2 => or2.equals('role', 'manager'))
+  .build()
+// Result: { OR: [{ role: 'admin' }, { role: 'manager' }] }
+```
+
+**Combining AND and OR:**
+
+```javascript
+where()
+  .equals('active', true)
+  .or(or => or.equals('role', 'admin'))
+  .and(and => and.gte('age', 18))
+  .build()
+// Result: {
+//   active: true,
+//   OR: [{ role: 'admin' }],
+//   AND: [{ age: { gte: 18 } }]
+// }
+```
+
+---
+
+#### Exists Operator
+
+##### `.exists(relationName, callback)`
+
+Adds an exists condition for row-level security filtering. Requires model with relations.
+
+**Parameters:**
+
+- `relationName` (string): Name of the relation
+- `callback` (Function): Function that receives a `WhereBuilder` instance
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where()
+  .exists('posts', posts => posts.equals('published', true))
+  .build()
+// Result: { _exists: { posts: { published: true } } }
+```
+
+**Multiple exists blocks:**
+
+```javascript
+where()
+  .exists('posts', p => p.equals('published', true))
+  .exists('comments', c => c.equals('approved', true))
+  .build()
+// Result: {
+//   _exists: {
+//     posts: { published: true },
+//     comments: { approved: true }
+//   }
+// }
+```
+
+**With complex conditions:**
+
+```javascript
+where()
+  .exists('memberships', m =>
+    m.equals('organization_id', 1).in('role', ['admin', 'owner'])
+  )
+  .build()
+// Result: {
+//   _exists: {
+//     memberships: {
+//       organization_id: 1,
+//       role: { in: ['admin', 'owner'] }
+//     }
+//   }
+// }
+```
+
+---
+
+#### Conditional Building
+
+##### `.when(condition, callback)`
+
+Conditionally applies conditions based on a boolean predicate.
+
+**Parameters:**
+
+- `condition` (boolean): If true, applies the callback
+- `callback` (Function): Function that receives `this` WhereBuilder instance
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+const userRole = 'admin'
+
+where()
+  .equals('active', true)
+  .when(userRole === 'admin', w => w.isNotNull('admin_at'))
+  .when(userRole === 'guest', w => w.isNull('verified_at'))
+  .build()
+// Result: { active: true, admin_at: { isNotNull: true } }
+```
+
+**With multiple conditions:**
+
+```javascript
+const filters = { showDeleted: false, minAge: 18 }
+
+where()
+  .equals('active', true)
+  .when(!filters.showDeleted, w => w.isNull('deleted_at'))
+  .when(filters.minAge, w => w.gte('age', filters.minAge))
+  .build()
+// Result: {
+//   active: true,
+//   deleted_at: { isNull: true },
+//   age: { gte: 18 }
+// }
+```
+
+---
+
+#### Raw Where Object
+
+##### `.raw(whereObject)`
+
+Merges a raw where object into the conditions.
+
+**Parameters:**
+
+- `whereObject` (Object): Plain where object to merge
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+where()
+  .equals('active', true)
+  .raw({
+    role: 'admin',
+    age: { gte: 18 },
+    OR: [{ verified: true }, { trusted: true }]
+  })
+  .build()
+// Result: {
+//   active: true,
+//   role: 'admin',
+//   age: { gte: 18 },
+//   OR: [{ verified: true }, { trusted: true }]
+// }
+```
+
+---
+
+#### Build Method
+
+##### `.build()`
+
+Returns the constructed where object.
+
+**Returns:** `Object` - Where conditions object
+
+**Example:**
+
+```javascript
+const conditions = where().equals('role', 'admin').gte('age', 18).build()
+
+console.log(conditions)
+// { role: 'admin', age: { gte: 18 } }
+```
+
+---
+
+#### Complete Examples
+
+**Complex filtering:**
+
+```javascript
+const { where } = require('knex-tools')
+
+const filters = where()
+  .equals('active', true)
+  .in('role', ['admin', 'manager'])
+  .gte('created_at', '2024-01-01')
+  .or(or =>
+    or.contains('email', '@company.com').contains('email', '@partner.com')
+  )
+  .and(and => and.gte('age', 18).lte('age', 65))
+  .build()
+```
+
+**Row-level security:**
+
+```javascript
+const userFilters = where()
+  .exists('memberships', m =>
+    m.equals('user_id', currentUserId).equals('active', true)
+  )
+  .exists('permissions', p => p.in('action', ['read', 'write']))
+  .build()
+```
+
+**Dynamic filters:**
+
+```javascript
+function buildUserFilters(options) {
+  const w = where()
+
+  if (options.role) {
+    w.equals('role', options.role)
+  }
+
+  if (options.minAge) {
+    w.gte('age', options.minAge)
+  }
+
+  if (options.search) {
+    w.or(or =>
+      or.contains('name', options.search).contains('email', options.search)
+    )
+  }
+
+  return w.build()
+}
+
+const filters = buildUserFilters({
+  role: 'admin',
+  minAge: 18,
+  search: 'john'
+})
+```
+
+---
+
+### QueryBuilder
+
+**Fluent API for building buildQuery configurations with method chaining.**
+
+```javascript
+const { query } = require('knex-tools')
+```
+
+The `QueryBuilder` class provides a fluent interface for constructing `buildQuery` configurations with support for projections, filtering, sorting, pagination, relations, and metadata.
+
+#### Factory Function
+
+```javascript
+query(modelObject)
+```
+
+Creates a new `QueryBuilder` instance for the given model.
+
+**Parameters:**
+
+- `modelObject` (Object): Model definition with projections and relations
+
+**Returns:** `QueryBuilder` instance
+
+**Example:**
+
+```javascript
+const userQuery = query(userModel)
+  .projection('details')
+  .where(w => w.equals('active', true))
+  .orderBy('created_at', 'desc')
+  .take(10)
+
+const config = userQuery.build()
+// Or execute directly
+const result = await userQuery.execute(knex)
+```
+
+---
+
+#### Basic Methods
+
+##### `.projection(name)`
+
+Sets the projection to use for the query.
+
+**Parameters:**
+
+- `name` (string): Projection name from model.projections
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+query(userModel).projection('details').build()
+// { projection: 'details' }
+```
+
+##### `.where(callbackOrObject)`
+
+Adds where conditions using either a fluent callback or plain object.
+
+**Parameters:**
+
+- `callbackOrObject` (Function | Object): WhereBuilder callback or plain where object
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// With fluent callback
+query(userModel)
+  .where(w => w.equals('role', 'admin').gte('age', 18))
+  .build()
+// { where: { role: 'admin', age: { gte: 18 } } }
+
+// With plain object
+query(userModel).where({ role: 'admin', active: true }).build()
+// { where: { role: 'admin', active: true } }
+
+// Multiple where calls are merged
+query(userModel).where({ role: 'admin' }).where({ active: true }).build()
+// { where: { role: 'admin', active: true } }
+```
+
+---
+
+#### Sorting and Pagination
+
+##### `.orderBy(fieldOrObject, direction)`
+
+Adds sorting configuration.
+
+**Parameters:**
+
+- `fieldOrObject` (string | Object): Field name or object with field-direction pairs
+- `direction` (string): Sort direction ('asc' or 'desc'), defaults to 'asc'
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// Single field
+query(userModel).orderBy('created_at', 'desc').build()
+// { orderBy: { created_at: 'desc' } }
+
+// Default direction (asc)
+query(userModel).orderBy('name').build()
+// { orderBy: { name: 'asc' } }
+
+// Multiple fields with chaining
+query(userModel).orderBy('role', 'asc').orderBy('name', 'desc').build()
+// { orderBy: { role: 'asc', name: 'desc' } }
+
+// Object syntax
+query(userModel).orderBy({ role: 'asc', created_at: 'desc' }).build()
+// { orderBy: { role: 'asc', created_at: 'desc' } }
+
+// Merge multiple orderBy calls
+query(userModel).orderBy({ name: 'asc' }).orderBy({ age: 'desc' }).build()
+// { orderBy: { name: 'asc', age: 'desc' } }
+```
+
+##### `.take(limit)`
+
+Sets the maximum number of records to return (LIMIT).
+
+**Parameters:**
+
+- `limit` (number): Maximum number of records
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+query(userModel).take(10).build()
+// { take: 10 }
+```
+
+##### `.skip(offset)`
+
+Sets the number of records to skip (OFFSET).
+
+**Parameters:**
+
+- `offset` (number): Number of records to skip
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+query(userModel).skip(20).build()
+// { skip: 20 }
+
+// Pagination example
+query(userModel).skip(20).take(10).build()
+// { skip: 20, take: 10 }
+// Page 3 of results (assuming 10 per page)
+```
+
+---
+
+#### Relations
+
+##### `.with(relationName, callbackOrProjection)`
+
+Includes a related resource in the query results.
+
+**Parameters:**
+
+- `relationName` (string): Name of the relation from model.relations
+- `callbackOrProjection` (Function | string | undefined):
+  - Function: Nested QueryBuilder callback
+  - String: Projection name
+  - Undefined: Uses default 'details' projection
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// Simple projection string
+query(userModel).with('posts', 'summary').build()
+// { each: { posts: { projection: 'summary' } } }
+
+// Default projection
+query(userModel).with('posts').build()
+// { each: { posts: { projection: 'details' } } }
+
+// Nested builder callback
+query(userModel)
+  .with('posts', q =>
+    q
+      .projection('details')
+      .where(w => w.equals('published', true))
+      .orderBy('created_at', 'desc')
+      .take(5)
+  )
+  .build()
+// {
+//   each: {
+//     posts: {
+//       projection: 'details',
+//       where: { published: true },
+//       orderBy: { created_at: 'desc' },
+//       take: 5
+//     }
+//   }
+// }
+
+// Multiple relations
+query(userModel).with('posts', 'summary').with('folders', 'short').build()
+// {
+//   each: {
+//     posts: { projection: 'summary' },
+//     folders: { projection: 'short' }
+//   }
+// }
+```
+
+##### `.withCounts(relationName, whereCallbackOrBoolean)`
+
+Adds related record counts per parent record.
+
+**Parameters:**
+
+- `relationName` (string): Name of the relation from model.relations
+- `whereCallbackOrBoolean` (Function | Object | boolean):
+  - Function: WhereBuilder callback for filtering
+  - Object: Plain where object for filtering
+  - Boolean: true to count all (default)
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// Count all related records
+query(userModel).withCounts('posts', true).build()
+// { withRelatedCounts: { posts: true } }
+
+// Default (count all)
+query(userModel).withCounts('posts').build()
+// { withRelatedCounts: { posts: true } }
+
+// With where object
+query(userModel).withCounts('posts', { published: true }).build()
+// { withRelatedCounts: { posts: { published: true } } }
+
+// With fluent where callback
+query(userModel)
+  .withCounts('posts', w =>
+    w.equals('published', true).gte('created_at', '2024-01-01')
+  )
+  .build()
+// {
+//   withRelatedCounts: {
+//     posts: {
+//       where: {
+//         published: true,
+//         created_at: { gte: '2024-01-01' }
+//       }
+//     }
+//   }
+// }
+
+// Multiple withCounts
+query(userModel)
+  .withCounts('posts', { published: true })
+  .withCounts('folders')
+  .build()
+// {
+//   withRelatedCounts: {
+//     posts: { published: true },
+//     folders: true
+//   }
+// }
+```
+
+---
+
+#### Modifiers and Metadata
+
+##### `.modifier(nameOrObject, params)`
+
+Applies named modifiers from the model.
+
+**Parameters:**
+
+- `nameOrObject` (string | Object): Modifier name or object with modifier-params pairs
+- `params` (Object): Parameters to pass to the modifier (when using string syntax)
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// Single modifier
+query(userModel).modifier('forRole', { role: 'admin' }).build()
+// { modifiers: { forRole: { role: 'admin' } } }
+
+// Modifier without params
+query(userModel).modifier('activeOnly').build()
+// { modifiers: { activeOnly: {} } }
+
+// Multiple modifiers with chaining
+query(userModel)
+  .modifier('forRole', { role: 'admin' })
+  .modifier('withMinPosts', { minCount: 10 })
+  .build()
+// {
+//   modifiers: {
+//     forRole: { role: 'admin' },
+//     withMinPosts: { minCount: 10 }
+//   }
+// }
+
+// Object syntax
+query(userModel)
+  .modifier({
+    forRole: { role: 'admin' },
+    activeOnly: {}
+  })
+  .build()
+// {
+//   modifiers: {
+//     forRole: { role: 'admin' },
+//     activeOnly: {}
+//   }
+// }
+```
+
+##### `.metadata(options)`
+
+Sets metadata options for the query.
+
+**Parameters:**
+
+- `options` (Object): Metadata configuration
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+query(userModel)
+  .metadata({
+    counts: { total: true, filtered: true }
+  })
+  .build()
+// { metadata: { counts: { total: true, filtered: true } } }
+```
+
+##### `.counts(options)`
+
+Shorthand for setting metadata counts.
+
+**Parameters:**
+
+- `options` (Object): Counts configuration
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+query(userModel).counts({ total: true, filtered: true }).build()
+// { metadata: { counts: { total: true, filtered: true } } }
+
+// Merges with existing metadata
+query(userModel).metadata({ foo: 'bar' }).counts({ total: true }).build()
+// { metadata: { foo: 'bar', counts: { total: true } } }
+```
+
+---
+
+#### Build and Execute
+
+##### `.build()`
+
+Returns the constructed query configuration object.
+
+**Returns:** `Object` - Query configuration for buildQuery
+
+**Example:**
+
+```javascript
+const config = query(userModel)
+  .projection('details')
+  .where(w => w.equals('active', true))
+  .orderBy('created_at', 'desc')
+  .take(10)
+  .build()
+
+// Use with buildQuery
+const result = await buildQuery(knex, userModel, config)
+```
+
+##### `.execute(knexInstance)`
+
+Executes the query immediately by calling `buildQuery`.
+
+**Parameters:**
+
+- `knexInstance` (Knex): Knex database instance
+
+**Returns:** `Promise<Object>` - Query results
+
+**Example:**
+
+```javascript
+const result = await query(userModel)
+  .projection('details')
+  .where(w => w.equals('role', 'admin'))
+  .execute(knex)
+
+// Result: { data: [...], metadata: {...} }
+```
+
+---
+
+#### Complete Examples
+
+**Basic query with filtering, sorting, and pagination:**
+
+```javascript
+const result = await query(userModel)
+  .projection('details')
+  .where(w =>
+    w.equals('active', true).in('role', ['admin', 'manager']).gte('age', 18)
+  )
+  .orderBy('created_at', 'desc')
+  .skip(20)
+  .take(10)
+  .execute(knex)
+```
+
+**Nested data fetching with relations:**
+
+```javascript
+const result = await query(postModel)
+  .projection('details')
+  .with('author', 'profile')
+  .with('comments', q =>
+    q
+      .projection('summary')
+      .where(w => w.equals('approved', true))
+      .orderBy('created_at', 'desc')
+      .take(5)
+  )
+  .with('tags', 'name')
+  .execute(knex)
+```
+
+**With metadata counts:**
+
+```javascript
+const result = await query(userModel)
+  .projection('details')
+  .where(w => w.equals('active', true))
+  .counts({ total: true, filtered: true })
+  .execute(knex)
+
+// Result:
+// {
+//   data: [...],
+//   metadata: { counts: { total: 1000, filtered: 250 } }
+// }
+```
+
+**With related counts:**
+
+```javascript
+const result = await query(userModel)
+  .projection('details')
+  .withCounts('posts', { published: true })
+  .withCounts('folders')
+  .with('posts', q => q.projection('summary').withCounts('comments'))
+  .execute(knex)
+
+// Result:
+// {
+//   data: [
+//     {
+//       id: 1,
+//       name: 'John',
+//       _counts: { posts: 10, folders: 3 },
+//       posts: {
+//         data: [
+//           { id: 1, title: 'Post 1', _counts: { comments: 5 } }
+//         ]
+//       }
+//     }
+//   ]
+// }
+```
+
+**Using modifiers:**
+
+```javascript
+const result = await query(userModel)
+  .projection('details')
+  .modifier('forRole', { role: 'admin' })
+  .modifier('withMinPosts', { minCount: 10 })
+  .execute(knex)
+```
+
+**Dynamic query building:**
+
+```javascript
+function buildUserQuery(filters) {
+  const q = query(userModel).projection('details')
+
+  if (filters.role) {
+    q.modifier('forRole', { role: filters.role })
+  }
+
+  if (filters.search) {
+    q.where(w =>
+      w.or(or =>
+        or.contains('name', filters.search).contains('email', filters.search)
+      )
+    )
+  }
+
+  if (filters.sortBy) {
+    q.orderBy(filters.sortBy, filters.sortDir || 'asc')
+  }
+
+  q.skip(filters.offset || 0).take(filters.limit || 10)
+
+  if (filters.includeCounts) {
+    q.counts({ total: true, filtered: true })
+  }
+
+  return q
+}
+
+const result = await buildUserQuery({
+  role: 'admin',
+  search: 'john',
+  sortBy: 'created_at',
+  sortDir: 'desc',
+  offset: 20,
+  limit: 10,
+  includeCounts: true
+}).execute(knex)
+```
+
+---
+
+### CountsBuilder
+
+**Fluent API for building counts query configurations with method chaining.**
+
+```javascript
+const { countQuery } = require('knex-tools')
+```
+
+The `CountsBuilder` class provides a fluent interface for constructing `counts` query configurations for lightweight count-only queries without fetching data.
+
+#### Factory Function
+
+```javascript
+countQuery(modelObject)
+```
+
+Creates a new `CountsBuilder` instance for the given model.
+
+**Parameters:**
+
+- `modelObject` (Object): Model definition
+
+**Returns:** `CountsBuilder` instance
+
+**Example:**
+
+```javascript
+const userCounts = countQuery(userModel)
+  .where(w => w.equals('active', true))
+  .total()
+  .filtered()
+
+const config = userCounts.build()
+// Or execute directly
+const result = await userCounts.execute(knex)
+// Returns: { total: 1000, filtered: 250 }
+```
+
+---
+
+#### Count Methods
+
+##### `.total()`
+
+Includes total count (all records in table) in the results.
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+countQuery(userModel).total().build()
+// { counts: { total: true } }
+```
+
+##### `.filtered()`
+
+Includes filtered count (records matching where conditions) in the results.
+
+**Returns:** `this` (for chaining)
+
+**Example:**
+
+```javascript
+countQuery(userModel).filtered().build()
+// { counts: { filtered: true } }
+```
+
+**Combined example:**
+
+```javascript
+countQuery(userModel).total().filtered().build()
+// { counts: { total: true, filtered: true } }
+```
+
+---
+
+#### Filtering
+
+##### `.where(callbackOrObject)`
+
+Adds where conditions using either a fluent callback or plain object.
+
+**Parameters:**
+
+- `callbackOrObject` (Function | Object): WhereBuilder callback or plain where object
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// With fluent callback
+countQuery(userModel)
+  .where(w => w.equals('role', 'admin').gte('age', 18))
+  .total()
+  .filtered()
+  .build()
+// {
+//   where: { role: 'admin', age: { gte: 18 } },
+//   counts: { total: true, filtered: true }
+// }
+
+// With plain object
+countQuery(userModel).where({ role: 'admin', active: true }).filtered().build()
+// {
+//   where: { role: 'admin', active: true },
+//   counts: { filtered: true }
+// }
+
+// Multiple where calls are merged
+countQuery(userModel)
+  .where({ role: 'admin' })
+  .where({ active: true })
+  .total()
+  .build()
+// {
+//   where: { role: 'admin', active: true },
+//   counts: { total: true }
+// }
+```
+
+---
+
+#### Modifiers
+
+##### `.modifier(nameOrObject, params)`
+
+Applies named modifiers to create custom count queries.
+
+**Parameters:**
+
+- `nameOrObject` (string | Object): Modifier name or object with modifier-params pairs
+- `params` (Object): Parameters to pass to the modifier (when using string syntax)
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// Single modifier
+countQuery(userModel)
+  .total()
+  .filtered()
+  .modifier('inactive', { active: false })
+  .build()
+// {
+//   counts: {
+//     total: true,
+//     filtered: true,
+//     modifiers: { inactive: { active: false } }
+//   }
+// }
+
+// Modifier without params
+countQuery(userModel).total().modifier('activeOnly').build()
+// {
+//   counts: {
+//     total: true,
+//     modifiers: { activeOnly: {} }
+//   }
+// }
+
+// Multiple modifiers with chaining
+countQuery(userModel)
+  .total()
+  .modifier('inactive', { active: false })
+  .modifier('verified', { verified: true })
+  .build()
+// {
+//   counts: {
+//     total: true,
+//     modifiers: {
+//       inactive: { active: false },
+//       verified: { verified: true }
+//     }
+//   }
+// }
+
+// Object syntax
+countQuery(userModel)
+  .total()
+  .modifier({
+    inactive: { active: false },
+    verified: { verified: true }
+  })
+  .build()
+// {
+//   counts: {
+//     total: true,
+//     modifiers: {
+//       inactive: { active: false },
+//       verified: { verified: true }
+//     }
+//   }
+// }
+```
+
+---
+
+#### Build and Execute
+
+##### `.build()`
+
+Returns the constructed counts configuration object.
+
+**Returns:** `Object` - Counts configuration for counts function
+
+**Example:**
+
+```javascript
+const config = countQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .total()
+  .filtered()
+  .build()
+
+// Use with counts function
+const result = await counts(knex, userModel, config)
+```
+
+##### `.execute(knexInstance)`
+
+Executes the count query immediately by calling `counts`.
+
+**Parameters:**
+
+- `knexInstance` (Knex): Knex database instance
+
+**Returns:** `Promise<Object>` - Count results
+
+**Example:**
+
+```javascript
+const result = await countQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .total()
+  .filtered()
+  .execute(knex)
+
+// Result: { total: 1000, filtered: 50 }
+```
+
+---
+
+#### Complete Examples
+
+**Basic counts:**
+
+```javascript
+const result = await countQuery(userModel).total().filtered().execute(knex)
+
+// Result: { total: 1000, filtered: 1000 }
+```
+
+**With filtering:**
+
+```javascript
+const result = await countQuery(userModel)
+  .where(w =>
+    w
+      .equals('active', true)
+      .in('role', ['admin', 'manager'])
+      .gte('created_at', '2024-01-01')
+  )
+  .total()
+  .filtered()
+  .execute(knex)
+
+// Result: { total: 1000, filtered: 150 }
+```
+
+**With custom modifier counts:**
+
+```javascript
+const result = await countQuery(userModel)
+  .where(w => w.gte('age', 18))
+  .total()
+  .filtered()
+  .modifier('inactive', { active: false })
+  .modifier('verified', { verified: true })
+  .execute(knex)
+
+// Result: { total: 1000, filtered: 800, inactive: 200, verified: 600 }
+```
+
+**Conditional counting:**
+
+```javascript
+function getCountStats(filters) {
+  const q = countQuery(userModel).total().filtered()
+
+  if (filters.role) {
+    q.where(w => w.equals('role', filters.role))
+  }
+
+  if (filters.minAge) {
+    q.where(w => w.gte('age', filters.minAge))
+  }
+
+  if (filters.includeInactive) {
+    q.modifier('inactive', { active: false })
+  }
+
+  return q
+}
+
+const result = await getCountStats({
+  role: 'admin',
+  minAge: 18,
+  includeInactive: true
+}).execute(knex)
+
+// Result: { total: 1000, filtered: 50, inactive: 10 }
+```
+
+**Using with plain where object:**
+
+```javascript
+const result = await countQuery(userModel)
+  .where({ role: 'admin', active: true })
+  .total()
+  .filtered()
+  .execute(knex)
+
+// Result: { total: 1000, filtered: 45 }
+```
+
+**Complex filtering:**
+
+```javascript
+const result = await countQuery(userModel)
+  .where(w =>
+    w
+      .equals('verified', true)
+      .or(or =>
+        or.contains('email', '@company.com').contains('email', '@partner.com')
+      )
+      .and(and => and.gte('age', 18).lte('age', 65))
+  )
+  .total()
+  .filtered()
+  .execute(knex)
+
+// Result: { total: 1000, filtered: 120 }
+```
+
+---
+
+### ExistsBuilder
+
+**Fluent API for building exists query configurations with method chaining.**
+
+```javascript
+const { existsQuery } = require('knex-tools')
+```
+
+The `ExistsBuilder` class provides a fluent interface for constructing `exists` query configurations for lightweight existence checks without fetching data. Uses `SELECT 1 LIMIT 1` internally for optimal performance.
+
+#### Factory Function
+
+```javascript
+existsQuery(modelObject)
+```
+
+Creates a new `ExistsBuilder` instance for the given model.
+
+**Parameters:**
+
+- `modelObject` (Object): Model definition
+
+**Returns:** `ExistsBuilder` instance
+
+**Example:**
+
+```javascript
+const hasAdmins = existsQuery(userModel).where(w => w.equals('role', 'admin'))
+
+const config = hasAdmins.build()
+// Or execute directly
+const result = await hasAdmins.execute(knex)
+// Returns: true or false
+```
+
+---
+
+#### Filtering
+
+##### `.where(callbackOrObject)`
+
+Adds where conditions using either a fluent callback or plain object.
+
+**Parameters:**
+
+- `callbackOrObject` (Function | Object): WhereBuilder callback or plain where object
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// With fluent callback
+existsQuery(userModel)
+  .where(w => w.equals('role', 'admin').gte('age', 18))
+  .build()
+// { where: { role: 'admin', age: { gte: 18 } } }
+
+// With plain object
+existsQuery(userModel).where({ role: 'admin', active: true }).build()
+// { where: { role: 'admin', active: true } }
+
+// Multiple where calls are merged
+existsQuery(userModel)
+  .where({ role: 'admin' })
+  .where({ active: true })
+  .where({ verified: true })
+  .build()
+// { where: { role: 'admin', active: true, verified: true } }
+```
+
+---
+
+#### Modifiers
+
+##### `.modifier(nameOrObject, params)`
+
+Applies named modifiers from the model.
+
+**Parameters:**
+
+- `nameOrObject` (string | Object): Modifier name or object with modifier-params pairs
+- `params` (Object): Parameters to pass to the modifier (when using string syntax)
+
+**Returns:** `this` (for chaining)
+
+**Examples:**
+
+```javascript
+// Single modifier
+existsQuery(userModel).modifier('forRole', { role: 'admin' }).build()
+// { modifiers: { forRole: { role: 'admin' } } }
+
+// Modifier without params
+existsQuery(userModel).modifier('activeOnly').build()
+// { modifiers: { activeOnly: {} } }
+
+// Multiple modifiers with chaining
+existsQuery(userModel)
+  .modifier('forRole', { role: 'admin' })
+  .modifier('activeOnly')
+  .build()
+// {
+//   modifiers: {
+//     forRole: { role: 'admin' },
+//     activeOnly: {}
+//   }
+// }
+
+// Object syntax
+existsQuery(userModel)
+  .modifier({
+    forRole: { role: 'admin' },
+    activeOnly: {}
+  })
+  .build()
+// {
+//   modifiers: {
+//     forRole: { role: 'admin' },
+//     activeOnly: {}
+//   }
+// }
+
+// Combining where and modifiers
+existsQuery(userModel)
+  .where(w => w.equals('active', true))
+  .modifier('forRole', { role: 'admin' })
+  .build()
+// {
+//   where: { active: true },
+//   modifiers: { forRole: { role: 'admin' } }
+// }
+```
+
+---
+
+#### Build and Execute
+
+##### `.build()`
+
+Returns the constructed exists configuration object.
+
+**Returns:** `Object` - Exists configuration for exists function
+
+**Example:**
+
+```javascript
+const config = existsQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .build()
+
+// Use with exists function
+const result = await exists(knex, userModel, config)
+```
+
+##### `.execute(knexInstance)`
+
+Executes the existence check immediately by calling `exists`.
+
+**Parameters:**
+
+- `knexInstance` (Knex): Knex database instance
+
+**Returns:** `Promise<boolean>` - true if records exist, false otherwise
+
+**Example:**
+
+```javascript
+const hasAdmins = await existsQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .execute(knex)
+
+// Returns: true or false
+```
+
+---
+
+#### Complete Examples
+
+**Basic existence check:**
+
+```javascript
+const hasUsers = await existsQuery(userModel).execute(knex)
+
+// Returns: true (if any users exist)
+```
+
+**With filtering:**
+
+```javascript
+const hasAdmins = await existsQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .execute(knex)
+
+// Returns: true or false
+```
+
+**Complex filtering:**
+
+```javascript
+const hasActiveAdmins = await existsQuery(userModel)
+  .where(w =>
+    w
+      .equals('role', 'admin')
+      .equals('active', true)
+      .gte('lastLogin', '2024-01-01')
+  )
+  .execute(knex)
+
+// Returns: true or false
+```
+
+**With modifiers:**
+
+```javascript
+const hasActiveUsers = await existsQuery(userModel)
+  .modifier('activeOnly')
+  .execute(knex)
+
+// Returns: true or false
+```
+
+**Combining where and modifiers:**
+
+```javascript
+const hasActiveAdmins = await existsQuery(userModel)
+  .where(w => w.equals('role', 'admin'))
+  .modifier('activeOnly')
+  .execute(knex)
+
+// Returns: true or false
+```
+
+**With logical operators:**
+
+```javascript
+const hasSpecialUsers = await existsQuery(userModel)
+  .where(w =>
+    w
+      .or(or => or.equals('role', 'admin').equals('role', 'owner'))
+      .and(and => and.equals('verified', true).gte('age', 18))
+  )
+  .execute(knex)
+
+// Returns: true or false
+```
+
+**Conditional existence check:**
+
+```javascript
+async function checkUserExists(filters) {
+  const q = existsQuery(userModel)
+
+  if (filters.role) {
+    q.where(w => w.equals('role', filters.role))
+  }
+
+  if (filters.email) {
+    q.where(w => w.equals('email', filters.email))
+  }
+
+  if (filters.activeOnly) {
+    q.modifier('activeOnly')
+  }
+
+  return await q.execute(knex)
+}
+
+const exists = await checkUserExists({
+  role: 'admin',
+  email: 'admin@example.com',
+  activeOnly: true
+})
+
+// Returns: true or false
+```
+
+**Using with plain where object:**
+
+```javascript
+const hasInactiveAdmins = await existsQuery(userModel)
+  .where({ role: 'admin', active: false })
+  .execute(knex)
+
+// Returns: true or false
+```
+
+**Row-level security check:**
+
+```javascript
+const canAccessPost = await existsQuery(postModel)
+  .where(w =>
+    w
+      .equals('id', postId)
+      .exists('memberships', m =>
+        m.equals('user_id', currentUserId).in('role', ['admin', 'owner'])
+      )
+  )
+  .execute(knex)
+
+// Returns: true if user has access, false otherwise
+```
+
+**Performance-optimized checks:**
+
+```javascript
+// Efficient - uses SELECT 1 LIMIT 1
+const hasAnyPosts = await existsQuery(postModel).execute(knex)
+
+// Better than counting
+// const count = await countQuery(postModel).total().execute(knex)
+// const hasAnyPosts = count.total > 0
+
+// Better than fetching data
+// const posts = await query(postModel).take(1).execute(knex)
+// const hasAnyPosts = posts.data.length > 0
 ```
