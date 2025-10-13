@@ -1922,6 +1922,38 @@ describe('knexTools', () => {
           )
           expect(result).toEqual(expected)
         })
+
+        test('hasMany relation returns empty array when projection excludes primary key', async () => {
+          // Create a temporary model with a projection that doesn't include the primary key
+          const userModelWithoutPK = {
+            ...userModel,
+            projections: {
+              ...userModel.projections,
+              nameOnly: (_, alias) => [`${alias}.name`, `${alias}.email`]
+            }
+          }
+
+          const result = await knexTools.buildQuery(db, userModelWithoutPK, {
+            projection: 'nameOnly', // This projection doesn't include 'id'
+            where: { id: 1 },
+            each: {
+              folders: { projection: 'short' }
+            }
+          })
+
+          // Since primary key 'id' is not in projection, all records will have undefined id
+          // After filtering with .filter(Boolean), primaryKeys array is empty
+          // So folders should be populated with empty array
+          expect(result).toEqual({
+            data: [
+              {
+                name: 'Alice',
+                email: 'alice@example.com',
+                folders: { data: [] }
+              }
+            ]
+          })
+        })
       })
 
       describe('manyToMany relationships', () => {
@@ -1992,6 +2024,41 @@ describe('knexTools', () => {
             parameters.queryConfig
           )
           expect(result).toEqual(expected)
+        })
+
+        test('manyToMany relation is not populated when projection excludes primary key', async () => {
+          // Create a temporary model with a projection that doesn't include the primary key
+          const memoModelWithoutPK = {
+            ...memoModel,
+            projections: {
+              ...memoModel.projections,
+              contentOnly: (_, alias) => [
+                `${alias}.content`,
+                `${alias}.user_id`
+              ]
+            }
+          }
+
+          const result = await knexTools.buildQuery(db, memoModelWithoutPK, {
+            projection: 'contentOnly', // This projection doesn't include 'id'
+            where: { id: 1 },
+            each: {
+              tags: { projection: 'short' }
+            }
+          })
+
+          // Since primary key 'id' is not in projection, all records will have undefined id
+          // After filtering with .filter(Boolean), primaryKeys array is empty
+          // manyToMany early returns without populating, so 'tags' key won't exist
+          expect(result).toEqual({
+            data: [
+              {
+                content: 'Important meeting notes',
+                user_id: 1
+                // Note: No 'tags' property at all due to early return
+              }
+            ]
+          })
         })
       })
     })
@@ -2616,6 +2683,30 @@ describe('knexTools', () => {
                 }
               ]
             }
+          },
+          {
+            name: 'skips relations with falsy config values',
+            parameters: {
+              model: userModel,
+              queryConfig: {
+                projection: 'short',
+                where: { id: 1 },
+                withRelatedCounts: {
+                  memos: true,
+                  folders: null
+                }
+              }
+            },
+            expected: {
+              data: [
+                {
+                  id: 1,
+                  name: 'Alice',
+                  email: 'alice@example.com',
+                  _counts: { memos: 2 }
+                }
+              ]
+            }
           }
         ]
 
@@ -2654,6 +2745,39 @@ describe('knexTools', () => {
 
           expect(result).toEqual({
             data: []
+          })
+        })
+
+        test('withRelatedCounts does not populate _counts when projection excludes primary key', async () => {
+          // Create a temporary model with a projection that doesn't include the primary key
+          const userModelWithoutPK = {
+            ...userModel,
+            projections: {
+              ...userModel.projections,
+              nameOnly: (_, alias) => [`${alias}.name`, `${alias}.email`]
+            }
+          }
+
+          const result = await knexTools.buildQuery(db, userModelWithoutPK, {
+            projection: 'nameOnly', // This projection doesn't include 'id'
+            where: { id: 1 },
+            withRelatedCounts: {
+              memos: true,
+              folders: true
+            }
+          })
+
+          // Since primary key 'id' is not in projection, all records will have undefined id
+          // After filtering with .filter(Boolean), recordIds array is empty
+          // populateRelatedCounts early returns without adding _counts property
+          expect(result).toEqual({
+            data: [
+              {
+                name: 'Alice',
+                email: 'alice@example.com'
+                // Note: No _counts property at all due to early return
+              }
+            ]
           })
         })
       })
@@ -3089,6 +3213,14 @@ describe('knexTools', () => {
           }
         },
         expected: false
+      },
+      {
+        name: 'applies default modifier when present in model',
+        parameters: {
+          model: longMemoModel,
+          queryConfig: {}
+        },
+        expected: true
       }
     ]
 
