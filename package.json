@@ -10,7 +10,8 @@
   "files": [
     "src/",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "docs/"
   ],
   "keywords": [
     "knex",

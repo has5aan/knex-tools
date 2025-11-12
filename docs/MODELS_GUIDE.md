@@ -38,8 +38,8 @@ const userModel = {
 
   // 4. Modifiers - Reusable query logic
   modifiers: {
-    default: (query, knex, alias) => {...},
-    forRole: (query, knex, alias, { role }) => {...}
+    default: (query, alias) => {...},
+    forRole: (query, alias, { role }) => {...}
   }
 }
 ```
@@ -142,19 +142,17 @@ projections: {
 
 ```javascript
 projections: {
-  forRole: (knexInstanceOrQuery, alias, relationName = null, { role }) => {
+  details: (knexInstanceOrQuery, alias, relationName = null) => {
     const base = [`${alias}.id`, `${alias}.name`]
 
-    if (role === 'admin') {
-      return [
-        ...base,
-        `${alias}.email`,
-        `${alias}.internal_notes`,
-        knexInstanceOrQuery.raw(`COUNT(posts.id) as managed_posts`)
-      ]
-    }
-
-    return base
+    // Always include email and internal fields
+    // Use modifiers to filter visibility at query time
+    return [
+      ...base,
+      `${alias}.email`,
+      `${alias}.internal_notes`,
+      knexInstanceOrQuery.raw(`COUNT(posts.id) as managed_posts`)
+    ]
   }
 }
 ```
@@ -305,7 +303,7 @@ Default modifiers are automatically applied to every query using the model. Used
 ```javascript
 modifiers: {
   // Reserved 'default' key - automatically applied
-  default: (query, knexInstance, tableAlias) => {
+  default: (query, tableAlias) => {
     query.where(`${tableAlias}.active`, true)
          .whereNull(`${tableAlias}.deleted_at`)
   }
@@ -332,7 +330,7 @@ module.exports = {
   ...userModel,
   alias: 'tu', // Different alias
   modifiers: {
-    default: (query, knexInstance, tableAlias) => {
+    default: (query, tableAlias) => {
       const tenantId = getCurrentTenantId() // Your tenant logic
       query
         .where(`${tableAlias}.tenant_id`, tenantId)
@@ -353,21 +351,21 @@ Named modifiers are manually applied with parameters. Used for:
 
 ```javascript
 modifiers: {
-  forRole: (query, knexInstance, tableAlias, { role }) => {
+  forRole: (query, tableAlias, { role }) => {
     query.where(`${tableAlias}.role`, role)
   },
 
-  createdAfter: (query, knexInstance, tableAlias, { date }) => {
+  createdAfter: (query, tableAlias, { date }) => {
     query.where(`${tableAlias}.created_at`, '>=', date)
   },
 
-  withPosts: (query, knexInstance, tableAlias, { minCount = 1 }) => {
+  withPosts: (query, tableAlias, { minCount = 1 }) => {
     query.join('posts as p', `${tableAlias}.id`, 'p.user_id')
          .groupBy(`${tableAlias}.id`)
-         .having(knexInstance.raw('COUNT(p.id)'), '>=', minCount)
+         .having(query.client.raw('COUNT(p.id)'), '>=', minCount)
   },
 
-  inDepartments: (query, knexInstance, tableAlias, { departments }) => {
+  inDepartments: (query, tableAlias, { departments }) => {
     query.join('departments as d', `${tableAlias}.department_id`, 'd.id')
          .where('d.name', 'in', departments)
   }
@@ -401,13 +399,12 @@ const recentActiveWriters = await buildQuery(knex, userModel, {
 All modifiers follow the same signature:
 
 ```javascript
-;(query, knexInstance, tableAlias, parameters) => {
+;(query, tableAlias, parameters) => {
   // Modify the query object
 }
 ```
 
 - **query**: Knex QueryBuilder instance to modify
-- **knexInstance**: Full Knex instance for raw queries, transactions, etc.
 - **tableAlias**: The model's alias for safe column references
 - **parameters**: Object with destructured parameters (named modifiers only)
 
@@ -434,7 +431,7 @@ const baseUserModel = {
   alias: 'u',
   columns: ['id', 'name', 'email', 'role', 'active'],
   projections: {
-    details: (knex, alias, relationName = null) => [
+    details: (query, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       `${alias}.email`
@@ -447,7 +444,7 @@ module.exports = {
   ...baseUserModel,
   alias: 'au', // Different alias to avoid conflicts
   modifiers: {
-    default: (query, knex, alias) => {
+    default: (query, alias) => {
       query.where(`${alias}.active`, true)
     }
   }
@@ -458,45 +455,52 @@ module.exports = {
   ...baseUserModel,
   alias: 'admin_u',
   modifiers: {
-    default: (query, knex, alias) => {
+    default: (query, alias) => {
       query.where(`${alias}.role`, 'admin').where(`${alias}.active`, true)
     }
   },
   projections: {
     ...baseUserModel.projections,
     // Add admin-specific projections
-    withPermissions: (knex, alias, relationName = null) => [
+    withPermissions: (query, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
-      knex.raw(`array_agg(permissions.name) as permissions`)
+      query.raw(`array_agg(permissions.name) as permissions`)
     ]
   }
 }
 ```
 
-### Dynamic Projections
+### Multiple Projections
 
-Projections that adapt based on context:
+Different projections for different use cases:
 
 ```javascript
 projections: {
-  forUser: (knexInstance, alias, { currentUser }) => {
-    const base = [`${alias}.id`, `${alias}.name`]
+  details: (knexInstanceOrQuery, alias, relationName = null) => {
+    return [
+      `${alias}.id`,
+      `${alias}.name`,
+      `${alias}.email`,
+      `${alias}.internal_notes`,
+      `${alias}.created_at`
+    ]
+  },
 
-    // Add email only if viewing own profile or admin
-    if (
-      currentUser.id === parseInt(alias.split('.')[1]) ||
-      currentUser.role === 'admin'
-    ) {
-      base.push(`${alias}.email`)
-    }
+  summary: (knexInstanceOrQuery, alias, relationName = null) => {
+    return [`${alias}.id`, `${alias}.name`]
+  },
 
-    // Add internal fields for admins only
-    if (currentUser.role === 'admin') {
-      base.push(`${alias}.internal_notes`, `${alias}.created_at`)
-    }
-
-    return base
+  admin: (knexInstanceOrQuery, alias, relationName = null) => {
+    return [
+      `${alias}.id`,
+      `${alias}.name`,
+      `${alias}.email`,
+      `${alias}.internal_notes`,
+      `${alias}.role`,
+      `${alias}.created_at`,
+      `${alias}.updated_at`
+    ]
   }
 }
 ```
@@ -505,7 +509,7 @@ projections: {
 
 ```javascript
 modifiers: {
-  withRecentActivity: (query, knexInstance, tableAlias, { days = 30 }) => {
+  withRecentActivity: (query, tableAlias, { days = 30 }) => {
     const recentDate = new Date()
     recentDate.setDate(recentDate.getDate() - days)
 
@@ -517,7 +521,7 @@ modifiers: {
     })
   },
 
-  excludingBlocked: (query, knexInstance, tableAlias, { byUserId }) => {
+  excludingBlocked: (query, tableAlias, { byUserId }) => {
     query.whereNotExists(function() {
       this.select(1)
           .from('blocked_users as bu')
@@ -557,7 +561,7 @@ modifiers: {
 ```javascript
 // Always filter sensitive data by default
 modifiers: {
-  default: (query, knex, alias) => {
+  default: (query, alias) => {
     query.where(`${alias}.active`, true)
          .whereNull(`${alias}.deleted_at`)
          // Hide internal test accounts
@@ -571,17 +575,17 @@ modifiers: {
 ```javascript
 projections: {
   // Lightweight projection for lists
-  summary: (knex, alias, relationName = null) => [
+  summary: (query, alias, relationName = null) => [
     `${alias}.id`, `${alias}.name`, `${alias}.created_at`
   ],
 
   // Heavy projection with computed fields for details
-  full: (knex, alias, relationName = null) => [
+  full: (query, alias, relationName = null) => [
     `${alias}.*`,
-    knex.raw(`
+    query.raw(`
       (SELECT COUNT(*) FROM posts WHERE user_id = ${alias}.id) as post_count
     `),
-    knex.raw(`
+    query.raw(`
       (SELECT MAX(created_at) FROM posts WHERE user_id = ${alias}.id) as last_post
     `)
   ]
