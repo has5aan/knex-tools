@@ -936,21 +936,21 @@ const userModel = {
 
   // Projections - functions that return column arrays (REQUIRED for buildQuery)
   projections: {
-    details: (_, alias, relationName = null) => [
+    details: (query, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
       `${alias}.email`,
       `${alias}.role`,
       `${alias}.created_at`
     ],
-    summary: (_, alias, relationName = null) => [
+    summary: (query, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`
     ],
-    withStats: (knexInstanceOrQuery, alias, relationName = null) => [
+    withStats: (query, alias, relationName = null) => [
       `${alias}.id`,
       `${alias}.name`,
-      knexInstanceOrQuery.raw(`COUNT(posts.id) as post_count`)
+      query.raw(`COUNT(posts.id) as post_count`)
     ]
   },
 
@@ -990,24 +990,24 @@ const userModel = {
   // Modifiers for reusable query logic
   modifiers: {
     // Automatic application (horizontal partitioning)
-    default: (query, knexInstance, alias) => {
+    default: (query, alias) => {
       query.where(`${alias}.active`, true).whereNull(`${alias}.deleted_at`)
     },
 
     // Parameterized modifiers
-    forRole: (query, knexInstance, alias, { role }) => {
+    forRole: (query, alias, { role }) => {
       query.where(`${alias}.role`, role)
     },
 
-    createdAfter: (query, knexInstance, alias, { date }) => {
+    createdAfter: (query, alias, { date }) => {
       query.where(`${alias}.created_at`, '>=', date)
     },
 
-    withMinPosts: (query, knexInstance, alias, { minCount }) => {
+    withMinPosts: (query, alias, { minCount }) => {
       query
         .join('posts', `${alias}.id`, 'posts.user_id')
         .groupBy(`${alias}.id`)
-        .having(knexInstance.raw('COUNT(posts.id)'), '>=', minCount)
+        .having(query.client.raw('COUNT(posts.id)'), '>=', minCount)
     }
   }
 }
